@@ -55,6 +55,8 @@ class Executor:
 
     async def stop(self):
         self._stopped.set()
+        # wake the queue in case run() is blocked on get
+        await self.exec_queue.put(None)
 
     def _record_trade(
         self,

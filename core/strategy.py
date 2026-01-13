@@ -41,6 +41,8 @@ class Strategy:
 
     async def stop(self):
         self._stopped.set()
+        # wake the queue in case run() is blocked on get
+        await self.monitor_queue.put(None)
 
     def _build_order_request(self, event: dict) -> Any:
         """
