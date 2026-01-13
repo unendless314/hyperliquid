@@ -22,8 +22,10 @@ import yaml
 from core.executor import Executor
 from core.monitor import Monitor
 from core.strategy import Strategy
+from core.reconciler import Reconciler
 from utils.db import init_sqlite
 from utils.validations import SettingsValidationError, validate_settings
+from utils.notifications import Notifier
 
 
 def parse_args():
@@ -54,7 +56,7 @@ def load_settings(path: str) -> dict:
 
 async def _run_services(settings, conn, stop_event: asyncio.Event):
     """
-    Orchestrate Monitor -> Strategy -> Executor pipelines.
+    Orchestrate Monitor -> Strategy -> Executor pipelines and support reconcilers/alerts.
     If any service task crashes, trigger stop_event to initiate shutdown.
     """
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
@@ -62,12 +64,15 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
 
     monitor = Monitor(monitor_queue, conn, settings)
     strategy = Strategy(monitor_queue, exec_queue, settings)
-    executor = Executor(exec_queue, conn)
+    executor = Executor(exec_queue, conn, mode=settings.get("mode", "live"))
+    reconciler = Reconciler(conn)
+    notifier = Notifier()
 
     tasks = [
         asyncio.create_task(monitor.run(), name="monitor"),
         asyncio.create_task(strategy.run(), name="strategy"),
         asyncio.create_task(executor.run(), name="executor"),
+        asyncio.create_task(reconciler.run(), name="reconciler"),
     ]
 
     stop_waiter = asyncio.create_task(stop_event.wait(), name="stop_event_wait")
@@ -93,6 +98,8 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         await monitor.stop()
         await strategy.stop()
         await executor.stop()
+        await reconciler.stop()
+        await notifier.stop()
 
         for t in tasks:
             t.cancel()
@@ -122,6 +129,8 @@ async def async_main():
     except (FileNotFoundError, SettingsValidationError) as exc:
         print(f"[BOOT][FAIL] {exc}", file=sys.stderr)
         sys.exit(1)
+
+    settings["mode"] = args.mode
 
     conn = init_sqlite(args.db)
 

@@ -1,15 +1,22 @@
 """
-Telegram / notification helper with rate limiting and circuit breaker.
-Placeholder implementation.
+Notifier stub.
+
+Provide a simple interface to send alerts (e.g., Telegram/email). For now, it logs to stdout.
 """
+
+from __future__ import annotations
+
+import asyncio
+import time
 
 
 class Notifier:
     def __init__(self):
-        # TODO: inject rate limiter, chat targets
-        pass
+        self._stopped = asyncio.Event()
 
     async def send(self, message: str):
-        # TODO: implement with rate limiting and failure safeguards
-        raise NotImplementedError
+        # TODO: integrate Telegram or other channels
+        print(f"[NOTIFY] {int(time.time())} {message}")
 
+    async def stop(self):
+        self._stopped.set()

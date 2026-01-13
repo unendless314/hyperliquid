@@ -3,11 +3,13 @@
 本文件供後續接手者快速了解尚未完成的重點工作。
 
 ## 1. 啟動/架構現況
-- `main.py` 已完成啟動骨架：讀取設定、驗證、初始化 SQLite、啟動 async lifecycle（Monitor/Strategy/Executor 鏈）並支援優雅關閉與任務崩潰監控。
-- `core/monitor.py`、`core/strategy.py`、`core/executor.py` 有基本 async skeleton（heartbeat→noop→打印），尚未接入實際 WS/風控/FSM。
+- `main.py` 已完成啟動骨架：讀取設定、驗證、初始化 SQLite、啟動 async lifecycle（Monitor/Strategy/Executor/Reconciler 鏈），支援優雅關閉、任務崩潰監控與 mode 傳遞（live/dry-run/backfill-only）。
+- `core/monitor.py`：可接 ws/rest 客戶端；具 backfill stub、dedup 寫入 processed_txs，無客戶端時發送 heartbeat。
+- `core/strategy.py`：基本映射與 sizing（fixed_amount、proportional，可從 notional_usd 或 size*price 推導）；風控尚未實作。
+- `core/executor.py`：簡易 rate limiter + backoff scaffold；mode: backfill-only 直接丟棄、dry-run 記錄 DRY_RUN、live 為 stub 下單並記錄 SUBMITTED→FILLED；重試循環支援停機退出。
+- `core/reconciler.py`：stub 心跳；`utils/notifications.py`：stub 通知器（未接通道，尚未作為獨立任務啟動）。
 - `utils/validations.py` 具設定驗證與 `config_version`/`config_hash` 生成；`utils/db.py` 具 SQLite schema 初始化與 WAL/timeout 設定。
-- 專案結構已與 PRD/System Design 對齊：`main -> monitor -> strategy -> executor -> notifier/reconciler`。
-- SQLite、Reconciliation、Gap 回補、Dedup、FSM 等功能需按 docs/PRD.md 與 docs/SYSTEM_DESIGN.md 實作。
+- 已有單元/管線測試（pytest 11/11）。
 
 ## 2. 必須先做的事項（建議順序）
 1) **Monitor 實作**：HL WebSocket + REST 回補；游標/gap detector（BACKFILL_WINDOW）、Dedup Gatekeeper（寫入 processed_txs）。
@@ -39,3 +41,6 @@
 ## 6. 推薦的下一步
 - 完成 Monitor/Strategy/Executor 的真實資料流 Happy Path：WS ingest + mapping/風控 + 下單 FSM stub，確保 end-to-end 可在 dry-run 跑通。
 - 之後再加上 backoff/circuit breaker、對帳、gap 回補等強健性功能。
+- 待辦提醒（nice-to-have）：
+  - Notifier 尚未啟動為長駐任務；實作告警時請掛入事件管線。
+  - SQLite 目前單連線；若未來高併發/多進程，需考慮每任務獨立連線或集中寫入 queue。
