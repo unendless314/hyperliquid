@@ -6,12 +6,16 @@ Current implementation:
 - Consumes events from monitor_queue.
 - Emits order requests onto exec_queue for the Executor.
 - Implements basic sizing for copy_mode fixed_amount/proportional; skips if insufficient data.
+- Adds lightweight risk gates: symbol mapping presence, positive size, optional capital utilization and price deviation checks.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class Strategy:
@@ -54,12 +58,15 @@ class Strategy:
         symbol_mapping = self.settings.get("symbol_mapping", {})
         cex_symbol = symbol_mapping.get(hl_symbol)
         if not cex_symbol:
-            print(f"[STRATEGY] unknown symbol mapping for {hl_symbol}, skip")
+            logger.warning("strategy_skip_unknown_symbol", extra={"symbol": hl_symbol})
             return None
 
         size_usd = self._calculate_size_usd(event)
         if not size_usd:
-            print("[STRATEGY] cannot determine size_usd, skip event")
+            logger.warning("strategy_skip_size_missing", extra={"symbol": hl_symbol})
+            return None
+
+        if not self._passes_risk(event, size_usd):
             return None
 
         return {
@@ -95,3 +102,69 @@ class Strategy:
 
         # Kelly or others not yet implemented
         return 0.0
+
+    def _passes_risk(self, event: dict, size_usd: float) -> bool:
+        # Positive size check
+        if size_usd <= 0:
+            return False
+
+        # Capital utilization check
+        hard = self.settings.get("capital_utilization_hard_limit")
+        balance = self.settings.get("my_account_balance_override") or self.settings.get("whale_estimated_balance")
+        if hard is not None and balance:
+            if size_usd / balance > float(hard):
+                logger.error(
+                    "strategy_drop_hard_capital_limit",
+                    extra={
+                        "size_usd": size_usd,
+                        "balance": balance,
+                        "ratio": size_usd / balance,
+                        "hard_limit": float(hard),
+                    },
+                )
+                return False
+
+        soft = self.settings.get("capital_utilization_soft_limit")
+        if soft is not None and balance:
+            if size_usd / balance > float(soft):
+                logger.warning(
+                    "strategy_warn_soft_capital_limit",
+                    extra={
+                        "size_usd": size_usd,
+                        "balance": balance,
+                        "ratio": size_usd / balance,
+                        "soft_limit": float(soft),
+                    },
+                )
+
+        # Price deviation checks (only if both prices present)
+        ref_price = event.get("reference_price")
+        trade_price = event.get("price")
+        if ref_price is not None and trade_price is not None:
+            pct = abs(trade_price - ref_price) / ref_price
+            pct_limit = self.settings.get("price_deviation_pct")
+            abs_limit = self.settings.get("price_deviation_usd")
+            if pct_limit is not None and pct > float(pct_limit):
+                logger.error(
+                    "strategy_drop_price_deviation_pct",
+                    extra={
+                        "pct": pct,
+                        "pct_limit": float(pct_limit),
+                        "price": trade_price,
+                        "reference_price": ref_price,
+                    },
+                )
+                return False
+            if abs_limit is not None and abs(trade_price - ref_price) > float(abs_limit):
+                logger.error(
+                    "strategy_drop_price_deviation_abs",
+                    extra={
+                        "abs_diff": abs(trade_price - ref_price),
+                        "abs_limit": float(abs_limit),
+                        "price": trade_price,
+                        "reference_price": ref_price,
+                    },
+                )
+                return False
+
+        return True

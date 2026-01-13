@@ -5,7 +5,7 @@
 ## 1. 啟動/架構現況
 - `main.py` 已完成啟動骨架：讀取設定、驗證、初始化 SQLite、啟動 async lifecycle（Monitor/Strategy/Executor/Reconciler 鏈），支援優雅關閉、任務崩潰監控與 mode 傳遞（live/dry-run/backfill-only）。
 - `core/monitor.py`：可接 ws/rest 客戶端；具 backfill stub、dedup 寫入 processed_txs，無客戶端時發送 heartbeat。
-- `core/strategy.py`：基本映射與 sizing（fixed_amount、proportional，可從 notional_usd 或 size*price 推導）；風控尚未實作。
+- `core/strategy.py`：基本映射與 sizing（fixed_amount、proportional，可從 notional_usd 或 size*price 推導）；已實作輕量風控（size>0、資金利用率 soft=警告/hard=drop、可選價格偏差 drop），日後需補交易所 filters / kelly 等進階檢查。
 - `core/executor.py`：簡易 rate limiter + backoff scaffold；mode: backfill-only 直接丟棄、dry-run 記錄 DRY_RUN、live 為 stub 下單並記錄 SUBMITTED→FILLED；重試循環支援停機退出。
 - `core/reconciler.py`：stub 心跳；`utils/notifications.py`：stub 通知器（未接通道，尚未作為獨立任務啟動）。
 - `utils/validations.py` 具設定驗證與 `config_version`/`config_hash` 生成；`utils/db.py` 具 SQLite schema 初始化與 WAL/timeout 設定。
