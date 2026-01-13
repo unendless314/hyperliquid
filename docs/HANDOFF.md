@@ -30,6 +30,7 @@
 - Kelly 參數來源與「新鮮度」判斷（預設 1h？）是否可配置。
 - Metrics 與日誌格式（JSON vs text）、上報管道（暫列本地）。
 - run_id 是否需要（目前未實作，可後續加入）。
+- 游標語義：HL user_fills 無 block_height 時，目前以 timestamp_ms 作為 `last_processed_cursor`；若未來需要嚴格按區塊，需改為取得高度或獨立存時間/高度兩個游標。
 
 ## 5. 檔案導覽
 - 需求/設計：`docs/PRD.md`, `docs/SYSTEM_DESIGN.md`, 本檔 `docs/HANDOFF.md`

@@ -4,8 +4,8 @@ Responsible for WebSocket connection to Hyperliquid, cursor tracking, gap detect
 
 Current implementation:
 - Supports pluggable ws_client/rest_client (pass actual Hyperliquid SDK clients when available).
-- Deduplicates on `processed_txs` (tx_hash + event_index + symbol) before enqueueing.
-- Persists cursor in system_state under key `last_processed_block`.
+- Deduplicates on composite key (tx_hash/fillId/tradeId + event_index) before enqueueing.
+- Persists cursor in system_state under key `last_processed_cursor` (uses block_height if present, else timestamp_ms).
 - Emits heartbeat if no ws_client is provided (keeps pipeline alive for dry-run/dev).
 """
 
@@ -30,7 +30,7 @@ class Monitor:
         ws_client: Optional[Any] = None,
         rest_client: Optional[Any] = None,
         backfill_window: int = 200,
-        cursor_key: str = "last_processed_block",
+        cursor_key: str = "last_processed_cursor",
         run_once: bool = False,
     ):
         self.queue = queue
@@ -87,17 +87,20 @@ class Monitor:
             await self._handle_raw_event(ev)
 
     async def _handle_raw_event(self, raw: dict):
-        tx_hash = raw.get("tx_hash")
-        event_index = raw.get("event_index", 0)
+        # Hyperliquid user_fills do not include tx_hash/block_height; use fillId/tradeId + event_index surrogate keys
+        tx_hash = raw.get("tx_hash") or raw.get("fillId") or raw.get("tradeId")
+        event_index = raw.get("event_index", raw.get("hyperethIndex", 0)) or 0
         symbol = raw.get("symbol")
-        block_height = raw.get("block_height")
-        timestamp = raw.get("timestamp", int(time.time()))
+        block_height = raw.get("block_height") or raw.get("blockHeight")  # may be None for HL fills
+        timestamp_ms = raw.get("timestamp") or raw.get("eventTime") or raw.get("dexProcessedTimestamp")
+        if timestamp_ms is None:
+            timestamp_ms = int(time.time() * 1000)
 
-        if not (tx_hash and symbol is not None and block_height is not None):
+        if not (tx_hash and symbol is not None):
             logger.warning("monitor_skip_malformed_event", extra={"event": raw})
             return
 
-        if not self._dedup_and_record(tx_hash, event_index, symbol, block_height, timestamp):
+        if not self._dedup_and_record(tx_hash, event_index, symbol, block_height, timestamp_ms):
             return  # duplicate
 
         await self.queue.put(
@@ -107,10 +110,16 @@ class Monitor:
                 "event_index": event_index,
                 "symbol": symbol,
                 "block_height": block_height,
-                "timestamp": timestamp,
+                "timestamp": timestamp_ms,
+                "price": raw.get("price"),
+                "size": raw.get("quantity") or raw.get("size"),
+                "quote_quantity": raw.get("quoteQuantity"),
+                "side": raw.get("side"),
+                "exchange_order_id": raw.get("orderId"),
+                "client_order_id": raw.get("clientOrderId"),
             }
         )
-        self._set_cursor(block_height)
+        self._set_cursor(block_height if block_height is not None else timestamp_ms)
 
     def _dedup_and_record(self, tx_hash, event_index, symbol, block_height, timestamp) -> bool:
         """
@@ -136,5 +145,5 @@ class Monitor:
         val = get_system_state(self.db_conn, self.cursor_key)
         return int(val) if val is not None else None
 
-    def _set_cursor(self, block_height: int) -> None:
-        set_system_state(self.db_conn, self.cursor_key, str(block_height))
+    def _set_cursor(self, cursor_value) -> None:
+        set_system_state(self.db_conn, self.cursor_key, str(cursor_value))

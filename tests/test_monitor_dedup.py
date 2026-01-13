@@ -35,6 +35,6 @@ async def test_monitor_dedup_inserts_once_and_updates_cursor():
 
     # cursor updated
     cur = conn.cursor()
-    cur.execute("SELECT value FROM system_state WHERE key='last_processed_block'")
+    cur.execute("SELECT value FROM system_state WHERE key='last_processed_cursor'")
     val = cur.fetchone()[0]
     assert val == "10"

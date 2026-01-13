@@ -54,6 +54,8 @@ class Strategy:
         """
         hl_symbol = event.get("symbol")
         side = event.get("side", "buy")
+        size_native = event.get("size") or event.get("amount")
+        price = event.get("price")
 
         symbol_mapping = self.settings.get("symbol_mapping", {})
         cex_symbol = symbol_mapping.get(hl_symbol)
@@ -74,6 +76,8 @@ class Strategy:
             "symbol": cex_symbol,
             "side": side,
             "size_usd": size_usd,
+            "size": size_native,
+            "price": price,
             "source": "strategy",
             "tx_hash": event.get("tx_hash"),
             "event_index": event.get("event_index"),

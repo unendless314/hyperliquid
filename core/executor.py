@@ -35,10 +35,11 @@ class SimpleRateLimiter:
 
 
 class Executor:
-    def __init__(self, exec_queue: asyncio.Queue, db_conn, mode: str = "live"):
+    def __init__(self, exec_queue: asyncio.Queue, db_conn, mode: str = "live", ccxt_client: Optional[object] = None):
         self.exec_queue = exec_queue
         self.db_conn = db_conn
         self.mode = mode
+        self.ccxt_client = ccxt_client
         self._stopped = asyncio.Event()
         self._rate_limiter = SimpleRateLimiter(min_interval_sec=0.1)  # ~10 rps default
 
@@ -96,6 +97,7 @@ class Executor:
                     size=size,
                     status="SUBMITTED",
                     exchange_order_id=exchange_order_id,
+                    price=None,
                 )
                 # Simulate success
                 self._record_trade(
@@ -105,6 +107,7 @@ class Executor:
                     size=size,
                     status="FILLED",
                     exchange_order_id=exchange_order_id,
+                    price=None,
                 )
                 print(f"[EXECUTOR] submitted stub order {exchange_order_id} {side} {size} {symbol}")
                 return
@@ -129,15 +132,16 @@ class Executor:
         size: float,
         status: str,
         exchange_order_id: str,
+        price: Optional[float],
     ):
         cur = self.db_conn.cursor()
         try:
             cur.execute(
                 """
-                INSERT INTO trade_history (correlation_id, symbol, side, size, status, exchange_order_id, tx_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO trade_history (correlation_id, symbol, side, size, status, exchange_order_id, tx_hash, price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (correlation_id, symbol, side, size, status, exchange_order_id, correlation_id),
+                (correlation_id, symbol, side, size, status, exchange_order_id, correlation_id, price),
             )
         finally:
             cur.close()
