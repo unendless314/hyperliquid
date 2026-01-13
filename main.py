@@ -60,7 +60,7 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
-    monitor = Monitor(monitor_queue, conn)
+    monitor = Monitor(monitor_queue, conn, settings)
     strategy = Strategy(monitor_queue, exec_queue, settings)
     executor = Executor(exec_queue, conn)
 
@@ -70,17 +70,24 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         asyncio.create_task(executor.run(), name="executor"),
     ]
 
+    stop_waiter = asyncio.create_task(stop_event.wait(), name="stop_event_wait")
+
     try:
-        while not stop_event.is_set():
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-            crashed = [t for t in done if t.exception() is not None]
+        while True:
+            done, pending = await asyncio.wait(
+                tasks + [stop_waiter],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stop_waiter in done:
+                break
+
+            crashed = [t for t in done if t is not stop_waiter and t.exception() is not None]
             if crashed:
-                # Log crash and trigger global shutdown
                 err = crashed[0].exception()
                 print(f"[ERROR] service crashed: {crashed[0].get_name()} -> {err}", file=sys.stderr)
                 stop_event.set()
+                await stop_waiter  # ensure the wait task completes
                 break
-            # No crash, likely stop_event set externally; loop condition will exit
     finally:
         # Signal services to stop gracefully
         await monitor.stop()
@@ -92,6 +99,9 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         for t in tasks:
             with contextlib.suppress(asyncio.CancelledError):
                 await t
+        stop_waiter.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stop_waiter
 
 
 def _install_signal_handlers(loop: asyncio.AbstractEventLoop, stop: asyncio.Event, signals: Iterable[int]) -> None:

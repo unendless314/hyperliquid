@@ -4,7 +4,7 @@ Handles Order FSM, CCXT integration, smart retry with jitter, and idempotent cli
 
 Current skeleton:
 - Consumes order-like messages from exec_queue.
-- Logs/prints placeholder handling.
+- Logs/prints placeholder handling and writes basic trade_history rows.
 """
 
 from __future__ import annotations
@@ -23,8 +23,56 @@ class Executor:
             msg = await self.exec_queue.get()
             if msg is None:
                 continue
-            print(f"[EXECUTOR] received: {msg}")
-            # TODO: implement FSM and exchange interactions
+            if msg.get("type") == "noop":
+                continue
+            if msg.get("type") != "order_request":
+                continue
+
+            # Placeholder FSM: mark SUBMITTED then immediately FILLED
+            correlation_id = msg.get("tx_hash")
+            symbol = msg.get("symbol")
+            side = msg.get("side", "buy")
+            size = msg.get("size_usd")
+
+            exchange_order_id = f"stub-{correlation_id}"
+            self._record_trade(
+                correlation_id=correlation_id,
+                symbol=symbol,
+                side=side,
+                size=size,
+                status="SUBMITTED",
+                exchange_order_id=exchange_order_id,
+            )
+            self._record_trade(
+                correlation_id=correlation_id,
+                symbol=symbol,
+                side=side,
+                size=size,
+                status="FILLED",
+                exchange_order_id=exchange_order_id,
+            )
+            print(f"[EXECUTOR] submitted stub order {exchange_order_id} {side} {size} {symbol}")
 
     async def stop(self):
         self._stopped.set()
+
+    def _record_trade(
+        self,
+        correlation_id: str,
+        symbol: str,
+        side: str,
+        size: float,
+        status: str,
+        exchange_order_id: str,
+    ):
+        cur = self.db_conn.cursor()
+        try:
+            cur.execute(
+                """
+                INSERT INTO trade_history (correlation_id, symbol, side, size, status, exchange_order_id, tx_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (correlation_id, symbol, side, size, status, exchange_order_id, correlation_id),
+            )
+        finally:
+            cur.close()
