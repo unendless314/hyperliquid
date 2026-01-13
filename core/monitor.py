@@ -5,6 +5,7 @@ Responsible for WebSocket connection to Hyperliquid, cursor tracking, gap detect
 Current implementation:
 - Supports pluggable ws_client/rest_client (pass actual Hyperliquid SDK clients when available).
 - Deduplicates on `processed_txs` (tx_hash + event_index + symbol) before enqueueing.
+- Persists cursor in system_state under key `last_processed_block`.
 - Emits heartbeat if no ws_client is provided (keeps pipeline alive for dry-run/dev).
 """
 
@@ -12,7 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+import logging
 from typing import Any, Optional
+
+from utils.db import get_system_state, set_system_state
+
+logger = logging.getLogger(__name__)
 
 
 class Monitor:
@@ -24,6 +30,8 @@ class Monitor:
         ws_client: Optional[Any] = None,
         rest_client: Optional[Any] = None,
         backfill_window: int = 200,
+        cursor_key: str = "last_processed_block",
+        run_once: bool = False,
     ):
         self.queue = queue
         self.db_conn = db_conn
@@ -32,6 +40,8 @@ class Monitor:
         self.backfill_window = backfill_window
         self.settings = settings
         self._stopped = asyncio.Event()
+        self.cursor_key = cursor_key
+        self.run_once = run_once
 
     async def run(self):
         """
@@ -42,10 +52,13 @@ class Monitor:
 
         if self.ws_client:
             await self._consume_ws()
+            return
         else:
             # Fallback: emit heartbeat to keep downstream alive in dev/dry-run
             while not self._stopped.is_set():
                 await self.queue.put({"type": "heartbeat", "source": "monitor", "ts": time.time()})
+                if self.run_once:
+                    break
                 await asyncio.sleep(1)
 
     async def _consume_ws(self):
@@ -64,9 +77,10 @@ class Monitor:
         Placeholder backfill logic; expects rest_client.get_recent(limit) to return list of events.
         """
         try:
-            events = await self.rest_client.get_recent(self.backfill_window)
+            last_cursor = self._get_cursor()
+            events = await self.rest_client.get_recent(self.backfill_window, since_block=last_cursor)
         except Exception as exc:  # pragma: no cover - best effort
-            print(f"[MONITOR] backfill failed: {exc}")
+            logger.error("monitor_backfill_failed", exc_info=exc)
             return
 
         for ev in events:
@@ -80,7 +94,7 @@ class Monitor:
         timestamp = raw.get("timestamp", int(time.time()))
 
         if not (tx_hash and symbol is not None and block_height is not None):
-            print(f"[MONITOR] skip malformed event: {raw}")
+            logger.warning("monitor_skip_malformed_event", extra={"event": raw})
             return
 
         if not self._dedup_and_record(tx_hash, event_index, symbol, block_height, timestamp):
@@ -96,6 +110,7 @@ class Monitor:
                 "timestamp": timestamp,
             }
         )
+        self._set_cursor(block_height)
 
     def _dedup_and_record(self, tx_hash, event_index, symbol, block_height, timestamp) -> bool:
         """
@@ -116,3 +131,10 @@ class Monitor:
 
     async def stop(self):
         self._stopped.set()
+
+    def _get_cursor(self) -> Optional[int]:
+        val = get_system_state(self.db_conn, self.cursor_key)
+        return int(val) if val is not None else None
+
+    def _set_cursor(self, block_height: int) -> None:
+        set_system_state(self.db_conn, self.cursor_key, str(block_height))

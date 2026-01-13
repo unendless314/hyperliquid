@@ -30,6 +30,31 @@ def init_sqlite(db_path: Optional[str] = None) -> sqlite3.Connection:
     return conn
 
 
+def set_system_state(conn: sqlite3.Connection, key: str, value: str) -> None:
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO system_state (key, value)
+            VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
+            (key, value),
+        )
+    finally:
+        cur.close()
+
+
+def get_system_state(conn: sqlite3.Connection, key: str) -> Optional[str]:
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT value FROM system_state WHERE key=?", (key,))
+        row = cur.fetchone()
+        return row[0] if row else None
+    finally:
+        cur.close()
+
+
 def _apply_pragmas(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
     cur.executescript(
@@ -47,14 +72,14 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     cur.executescript(
         """
         CREATE TABLE IF NOT EXISTS processed_txs (
-            tx_hash TEXT PRIMARY KEY,
+            tx_hash TEXT,
             event_index INTEGER,
             symbol TEXT,
             block_height INTEGER,
             timestamp INTEGER,
             created_at INTEGER DEFAULT (strftime('%s','now'))
         );
-
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_pk ON processed_txs(tx_hash, event_index);
         CREATE INDEX IF NOT EXISTS idx_processed_created_at ON processed_txs(created_at);
 
         CREATE TABLE IF NOT EXISTS trade_history (
