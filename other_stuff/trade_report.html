@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交易回測報告</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border-left: 5px solid #3498db; }
+        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #7f8c8d; text-transform: uppercase; }
+        .card .value { font-size: 24px; font-weight: bold; color: #2c3e50; }
+        .card.positive .value { color: #27ae60; }
+        .card.negative .value { color: #e74c3c; }
+        .chart-container { position: relative; height: 400px; width: 100%; margin-bottom: 40px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; color: #555; }
+        tr:hover { background-color: #f5f5f5; }
+        .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>交易績效報告</h1>
+        
+        <div class="metrics-grid">
+            <div class="card">
+                <h3>總收益 (Net PnL)</h3>
+                <div class="value positive">
+                    $235,683.43
+                </div>
+            </div>
+            <div class="card">
+                <h3>總回報率 (ROI)</h3>
+                <div class="value positive">
+                    7.86%
+                </div>
+            </div>
+            <div class="card">
+                <h3>勝率 (Win Rate)</h3>
+                <div class="value">
+                    80.6%
+                </div>
+            </div>
+            <div class="card">
+                <h3>盈虧比 (Profit Factor)</h3>
+                <div class="value">
+                    13.40
+                </div>
+            </div>
+            <div class="card">
+                <h3>夏普率 (Sharpe Ratio)</h3>
+                <div class="value">
+                    10.72
+                </div>
+            </div>
+            <div class="card">
+                <h3>最大回撤 (Max Drawdown)</h3>
+                <div class="value negative">
+                    0.40%
+                </div>
+            </div>
+            <div class="card">
+                <h3>期末權益 (Final Equity)</h3>
+                <div class="value">
+                    $3,235,683
+                </div>
+            </div>
+             <div class="card">
+                <h3>總交易次數 (Closed)</h3>
+                <div class="value">
+                    31
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="equityChart"></canvas>
+        </div>
+
+        <h2>近期交易紀錄 (最近 10 筆)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>時間</th>
+                    <th>幣種</th>
+                    <th>動作</th>
+                    <th>價格</th>
+                    <th>損益 (PnL)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>2026-01-12 10:02:58</td><td>BTC</td><td>Close Long</td><td>91460</td><td style='color: green'>5540.13</td></tr><tr><td>2026-01-10 04:02:59</td><td>BTC</td><td>Open Long</td><td>90262</td><td style='color: red'>-226.22</td></tr><tr><td>2026-01-10 01:03:04</td><td>BTC</td><td>Close Long</td><td>91588</td><td style='color: green'>6132.39</td></tr><tr><td>2026-01-09 00:03:02</td><td>BTC</td><td>Close Long</td><td>90773</td><td style='color: green'>903.78</td></tr><tr><td>2026-01-08 21:02:57</td><td>BTC</td><td>Open Long</td><td>89958</td><td style='color: red'>-224.30</td></tr><tr><td>2026-01-08 16:02:57</td><td>BTC</td><td>Close Long</td><td>90465.933049884</td><td style='color: red'>-1914.23</td></tr><tr><td>2026-01-08 15:03:02</td><td>BTC</td><td>Open Long</td><td>89845.0726090611</td><td style='color: red'>-233.87</td></tr><tr><td>2026-01-08 05:02:55</td><td>BTC</td><td>Open Long</td><td>91214.1372816469</td><td style='color: red'>-190.99</td></tr><tr><td>2026-01-07 18:03:00</td><td>BTC</td><td>Open Long</td><td>91667</td><td style='color: red'>-310.77</td></tr><tr><td>2026-01-07 06:03:02</td><td>BTC</td><td>Close Long</td><td>93395</td><td style='color: green'>21588.73</td></tr>
+            </tbody>
+        </table>
+        
+        <div class="footer">Generated on 2026-01-13 11:48:22</div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('equityChart').getContext('2d');
+        const equityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['2025-12-06 11:30:08', '2025-12-06 11:30:09', '2025-12-06 17:02:48', '2025-12-07 23:03:02', '2025-12-08 00:02:59', '2025-12-08 02:02:58', '2025-12-08 06:02:56', '2025-12-08 07:02:57', '2025-12-08 08:03:00', '2025-12-08 16:02:49', '2025-12-09 00:03:02', '2025-12-09 22:02:49', '2025-12-10 00:02:57', '2025-12-10 01:02:59', '2025-12-13 08:03:02', '2025-12-15 08:02:51', '2025-12-15 10:02:47', '2025-12-15 23:03:02', '2025-12-16 02:02:59', '2025-12-17 07:02:58', '2025-12-17 17:02:54', '2025-12-17 23:03:02', '2025-12-18 00:02:58', '2025-12-18 18:02:50', '2025-12-18 22:03:00', '2025-12-19 02:02:58', '2025-12-19 04:02:58', '2025-12-19 12:03:01', '2025-12-19 14:02:57', '2025-12-19 17:03:00', '2025-12-20 02:02:59', '2025-12-20 04:02:59', '2025-12-22 04:02:54', '2025-12-22 20:02:50', '2025-12-23 04:02:59', '2025-12-23 22:02:54', '2025-12-26 00:02:49', '2025-12-26 09:02:49', '2025-12-26 11:02:59', '2025-12-26 13:02:48', '2025-12-26 23:03:01', '2025-12-29 11:02:53', '2025-12-29 18:03:04', '2025-12-29 21:03:04', '2026-01-01 04:02:49', '2026-01-02 07:02:48', '2026-01-02 17:02:58', '2026-01-03 01:02:58', '2026-01-03 03:02:59', '2026-01-04 04:03:03', '2026-01-06 03:02:58', '2026-01-07 02:03:01', '2026-01-07 06:03:02', '2026-01-07 18:03:00', '2026-01-08 05:02:55', '2026-01-08 15:03:02', '2026-01-08 16:02:57', '2026-01-08 21:02:57', '2026-01-09 00:03:02', '2026-01-10 01:03:04', '2026-01-10 04:02:59', '2026-01-12 10:02:58'],
+                datasets: [{
+                    label: '帳戶權益 (Equity)',
+                    data: [3000000.0, 2999753.43, 2999681.94, 2999570.68, 3000025.28, 3004269.42, 3004191.75, 3004131.52, 3005985.81, 3009689.16, 3009594.4, 3009494.73, 3025921.66, 3049216.39, 3048194.25, 3048023.74, 3043378.79, 3043125.52, 3042863.19, 3037346.33, 3037137.39, 3052768.32, 3052365.58, 3048176.1, 3058008.79, 3057600.3, 3057424.15, 3055129.73, 3054097.9, 3058614.19, 3058337.71, 3061333.27, 3068104.14, 3083125.53, 3082860.36, 3082618.97, 3088089.03, 3087876.61, 3103513.04, 3110345.31, 3110088.11, 3120347.85, 3120153.16, 3119973.76, 3119774.42, 3125514.7, 3135596.38, 3156911.23, 3156699.58, 3166559.91, 3205010.39, 3204618.78, 3226207.51, 3225896.74, 3225705.75, 3225471.88, 3223557.65, 3223333.35, 3224237.13, 3230369.52, 3230143.3, 3235683.43],
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10,
+                            maxRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: false
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+    
