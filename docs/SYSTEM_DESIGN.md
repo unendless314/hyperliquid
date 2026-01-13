@@ -1,75 +1,111 @@
-# Hyperliquid Copy Trader - 系統設計規格書 (Technical Specification)
+# Hyperliquid Copy Trader - 系統設計規格書 (Technical Specification) v1.2
 
-## 1. 專案目標
-打造一個全自動、低延遲、高可靠性的 Hyperliquid 鏈上跟單系統。系統需能 7x24 小時監控目標錢包（大戶），並根據預設策略同步執行相同方向的交易。
+## 1. 系統架構 (System Architecture)
 
-## 2. 系統架構 (System Architecture)
+採用 **事件驅動 (Event-Driven)** 與 **狀態機 (State Machine)** 結合的架構，並引入 SQLite 作為單一事實來源 (SSOT)。
 
-採用模組化設計，確保各組件職責分離（Separation of Concerns）：
+### 1.1 核心模組 (Core Modules)
 
-### 2.1 模組定義
-- **Main (入口)**: `main.py`。負責初始化所有模組，啟動監控循環，處理系統信號（如優雅退出）。
-- **Monitor (監聽模組)**: `core/monitor.py`。負責透過 WebSocket 建立與 Hyperliquid 的長連線。專注於即時解析目標錢包的 `userFills` 訊息。
-- **Strategy (策略模組)**: `core/strategy.py`。系統的「大腦」。負責過濾訊號、計算倉位大小、管理交易白名單。
-- **Executor (執行模組)**: `core/executor.py`。負責與您的錢包交互，執行 API 下單指令，處理手續費與滑點設定。
-- **Utils (工具模組)**: 包含日誌系統 (`logger.py`)、環境變數載入與通知發送。
+*   **Main (Orchestrator)**:
+    *   負責加載配置 (`settings.yaml`) 並執行 **Schema Validation** (fail-fast)。
+    *   初始化 SQLite 資料庫連線。
+    *   啟動並監控子線程/協程 (Monitor, Executor, Reconciler)。
 
-### 2.2 資料流向 (Data Flow)
-1.  **Monitor** (Hyperliquid SDK) 收到 WebSocket 訊息 -> 解析為 `TradeEvent` (Raw Symbol)。
-2.  **Strategy** 接收 `TradeEvent`：
-    - **Symbol Mapping**: 將 Hyperliquid Symbol (如 `HYPE`) 轉換為 CEX Symbol (如 `HYPE/USDT`). 若無對應則 Drop。
-    - 讀取 `settings.yaml` 判斷當前模式 (Fixed/Proportional/Kelly)。
-    - 呼叫 `Executor` 查詢 **Binance** 帳戶餘額與資金佔用率。
-    - **風控檢查**: (Soft/Hard Limit 針對 Binance 帳戶)。
-    - 計算最終下單金額 `size_usd`。
-    - 產生 `OrderAction` (標準化指令)。
-3.  **Executor** (CCXT) 接收 `OrderAction` -> 調用 Binance API 下單 -> 返回結果。
-4.  **Logger & Recorder**: 
-    - **Logger**: 記錄技術日誌至 `logs/trading.log`。
-    - **Recorder**: 將成交結果寫入 `trade_history.csv`。
-    - **Notifier**: 若 Telegram 開啟，同步發送訊息通知。
+*   **Monitor (Ingestion Layer)**:
+    *   **WebSocket Client**: 維護與 Hyperliquid 的長連線。
+    *   **Gap Detector**: 比對 `latest_block_height` 與 DB 中的 `cursor`。
+        * 若落差 ≤ `BACKFILL_WINDOW` (例：200 區塊)，以 REST 回補並經過 Dedup 流程。
+        * 若落差 > `BACKFILL_WINDOW`，觸發安全停機 (Halt) + Alert，避免在資料缺口下繼續交易。
+    *   **Dedup Gatekeeper**: 查詢 SQLite `processed_txs` 表 (含 `tx_hash`,`event_index`,`symbol`)；若存在 -> Drop；若無 -> Insert 並傳遞。
 
-## 3. 檔案結構 (File Structure)
-```text
-hyperliquid_copy_trader/
-├── config/
-│   ├── settings.yaml       
-│   └── .env                
-├── core/
-│   ├── monitor.py          
-│   ├── strategy.py         
-│   └── executor.py         
-├── utils/
-│   ├── logger.py           
-│   ├── mapper.py           
-│   ├── recorder.py         # [New] 負責 CSV 檔案讀寫
-│   └── notifications.py    
-├── logs/                   
-├── data/
-│   └── trade_history.csv   # [New] 存放交易歷史數據
-├── docs/
-│   ├── PRD.md              
-│   └── SYSTEM_DESIGN.md    
-...
-```
+*   **Strategy (Processing Layer)**:
+    *   執行 Symbol Mapping (Hyperliquid -> Binance)。
+    *   執行 Risk Checks (Price Deviation：百分比+USD 絕對值、Blacklist、Binance Filters)。
+    *   計算 Position Size。
 
-## 4. 關鍵技術細節 (Technical Details)
+*   **Executor (Action Layer)**:
+    *   **Order FSM**: 管理訂單狀態 (Submit -> Monitor -> Finalize)，包含 `UNKNOWN`/`STUCK` 狀態供 Reconciler 後續處理。
+    *   **Smart Retry**: 實作帶有 Jitter 的指數退避 (Exponential Backoff)，與 Status Poller/Query 共用同一組 Rate Limiter/Backoff。
+    *   **Idempotency Key**: `clientOrderId = hl-{tx_hash}-{nonce}`，確保重試或斷線重送不會重複開倉。
 
-### 4.1 錯誤處理與防呆機制
-- **WebSocket 斷線重連**:
-    - **監控**: Monitor 需實作「心跳偵測 (Heartbeat)」，若超過預定時間（如 30秒）未收到伺服器回報，視為中斷。
-    - **復原**: 採用指數退避 (Exponential Backoff) 機制嘗試重新連線，避免頻繁請求造成 IP 被封鎖。
-- **異常捕獲**: 任何 API 請求失敗均需捕獲異常，避免程式崩潰，並透過日誌與 Telegram 警告。
-- **餘額與水位檢查**: 每次執行 Strategy 前，必須先同步 Binance 的最新帳戶狀態。
+*   **Reconciler (Safety Layer)**:
+    *   **非同步迴圈**: 每 X 秒執行一次。
+    *   **Drift Check**: `abs(Binance_Position - DB_Position) > Threshold`?
+    *   分級動作：< `warn_threshold` 記錄+通知；≥ `critical_threshold` 觸發 Critical Alert，並可選擇 `Force Sync` (多退少補/平倉)。
 
-### 4.2 安全性
-- **私鑰管理**: 僅透過 `.env` 載入，程式運行中不以明文列印私鑰。
-- **唯讀 vs 交易**: 建議監控功能與執行功能分開處理權限（若 API 支援）。
+### 1.2 資料儲存 (Data Persistence - SQLite)
 
-## 5. 概念驗證 (POC) 階段目標
-1. 實現穩定連線並正確捕捉目標錢包的交易紀錄。
-2. 在控制台 (Console) 正確顯示模擬下單的計算結果（不實際扣款）。
-3. 完成日誌系統，確保所有操作可追溯。
+使用 SQLite，確保 ACID 特性。
+
+**Table Schema (Draft):**
+1.  `processed_txs`:
+    *   `tx_hash` (PK), `event_index`, `symbol`, `block_height`, `timestamp`, `created_at`。
+    *   索引：`tx_hash` 唯一、`created_at` 供 TTL 清理。
+    *   用於冪等性檢查；保留 24h，背景任務定期清理。
+2.  `trade_history`:
+    *   `id` (PK), `correlation_id`, `symbol`, `side`, `size`, `price`, `pnl`, `status`, `exchange_order_id`, `tx_hash`。
+    *   索引：`correlation_id`、`tx_hash`。
+    *   用於報表與歷史回測。
+3.  `system_state`:
+    *   `key` (PK), `value`。
+    *   用於儲存 `last_processed_block`, `config_hash`, `config_version` 等游標/審計數據。
+
+**SQLite 操作守則**
+- 啟用 WAL、設定 `busy_timeout`，單執行緒單連線；避免跨執行緒共享連線。
+- 每日備份並驗證可還原；`processed_txs` 具備定期 vacuum/cleanup 任務。
+
+## 2. 數據流與控制流 (Data & Control Flow)
+
+### 2.1 正常交易流程
+1.  **Monitor**: 收到 `UserFills` -> Hash Check (SQLite) -> 通過 -> 寫入 SQLite (Pending) -> Push to Queue；若 Gap 超過 `BACKFILL_WINDOW`，觸發 Halt。
+2.  **Strategy**: Pull Queue -> 驗證數據新鮮度 -> 計算 Size -> 檢查 Binance Filters -> 產生 `OrderRequest`。
+3.  **Executor**:
+    *   檢查 `CircuitBreaker` (是否觸發熔斷)；`CircuitBreaker` 與 Rate Limiter 共用冷卻計數。
+    *   呼叫 CCXT `create_order` (帶 `clientOrderId`)。
+    *   收到 `order_id` -> 更新 SQLite 狀態為 `SUBMITTED`。
+    *   啟動 `OrderMonitor` 輪詢成交狀態 (受同一 Rate Limiter 管控) -> 更新 SQLite 為 `FILLED` / `PARTIALLY_FILLED` / `EXPIRED`；若無回報超時，標記 `UNKNOWN`。
+4.  **Notifier**: 根據狀態變更發送 Telegram (需經過 Rate Limiter)。
+
+### 2.2 錯誤處理流程
+*   **Rate Limit (429)**: 暫停所有 API 請求 X 秒 (Shared Backoff)；Status Poller 也受限，但 Reconciler 的只讀查詢可豁免。
+*   **Network Error**: 標記訂單為 `UNKNOWN` -> 交由 `Reconciler` 確認最終狀態。
+*   **Insuffient Balance**: 標記為 `FAILED` -> 停止開新倉 -> 發送 Alert。
+
+## 3. 安全與運維 (Security & Ops)
+
+*   **密鑰管理**:
+    *   支援從環境變數 (`OS Env`) 或加密的 `.env` 檔案讀取。
+    *   程式碼中僅保存 `API_KEY` 的 Masked Version (e.g., `***abcd`) 用於日誌。
+*   **Dry-Run Mode**:
+    *   啟用時，Executor 攔截所有 `write` 操作並在啟動自檢時驗證「寫路徑全被阻擋」；否則拒絕啟動。
+    *   `MockExchange` 類別模擬掛單與成交回報，更新虛擬餘額。
+*   **Health Checks**:
+    *   提供 `/health` 端點 (若有 Web Server) 或本地 `heartbeat` 文件，供外部監控工具 (如 K8s probe) 檢測。
+
+## 4. 測試策略 (Testing Strategy)
+*   **Unit Tests**: Config Validation, Kelly Calculation, Deduplication Logic.
+*   **Integration Tests (Binance Testnet)**:
+    *   Happy Path: 完整下單成交流程。
+    *   Chaos: 模擬網路斷線、模擬 429、模擬部分成交。
+    *   Reconciliation: 手動在交易所平倉，驗證系統是否能偵測並報警。
+
+## 5. 配置與版本治理 (Config & Versioning)
+- `settings.yaml` 必須包含 `config_version` 與 `config_hash`；對未知欄位 fail-fast。
+- 部署時將 `config_hash` 寫入 `system_state` 以供審計與回溯。
+
+## 6. 啟動與運行流程 (Startup & Runbook)
+- **單一入口指令**: 例如 `python main.py --mode {live|dry-run|backfill-only}`，由 Orchestrator 依序啟動各模組；禁止人工逐檔啟動。
+- **順序與責任**:
+  1. `Main` 載入配置並做 Schema 驗證；記錄 `config_hash`/`config_version` 至 `system_state`。
+  2. 初始化 SQLite（WAL、busy_timeout、TTL 清理與索引確認）。
+  3. 立即執行 Reconciliation；若達 critical 閾值，進入安全模式（停開新倉，僅允許手動或自動修復）。
+  4. Gap 回補：以 `cursor` + `BACKFILL_WINDOW` 抓歷史，經 Dedup 後入隊列；若超窗則安全停機並告警。
+  5. 啟動 Monitor / Strategy / Executor / Notifier / Telemetry；綁定共享 Rate Limiter + CircuitBreaker。
+  6. 進入主迴圈；關閉流程需先停止接收新訊號、刷新隊列、更新 `system_state`（cursor、config_hash）。
+- **模式旗標**:
+  - `live`: 實盤，允許對外寫入。
+  - `dry-run`: 禁止對外寫入，使用 `MockExchange`，啟動時需驗證「寫路徑全阻斷」。
+  - `backfill-only`: 僅做 Gap 回補與 Dedup，同步游標，不觸發下單，適用冷啟/修復。
 
 ---
-*Last Updated: 2026-01-13*
+*Last Updated: 2026-01-13 (v1.2)*

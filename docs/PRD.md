@@ -1,73 +1,83 @@
-# Hyperliquid Copy Trader - 產品需求文件 (PRD)
+# Hyperliquid Copy Trader - 產品需求文件 (PRD) v1.2
 
 ## 1. 專案概述 (Overview)
-本專案旨在開發一套跨平台的自動化跟單交易系統。核心邏輯為「鏈上監聽、中心化執行」：
-- **訊號源 (Signal Source)**: 實時監控 Hyperliquid 交易所上的目標錢包（Smart Money）。
-- **執行端 (Execution Venue)**: 將訊號轉換後，透過 API 在中心化交易所 (CEX) 自動下單。**初期版本優先支援 Binance (幣安)**，未來架構保留擴充至 OKX, Gate.io 的能力。
+本專案旨在開發一套生產級別 (Production-Grade) 的自動化跟單交易系統。核心邏輯為「鏈上監聽、中心化執行」。
+- **訊號源**: Hyperliquid (Target Wallet)。
+- **執行端**: Binance USDT-M Futures。
+- **核心目標**: 在確保**資金安全**與**系統強健性**的前提下，實現低延遲跟單。
 
 ## 2. 核心功能需求 (Functional Requirements)
 
 ### 2.1 監控與訊號捕捉 (Input)
-- **即時推播 (WebSocket Push)**: 
-  - 系統採用 WebSocket 長連線技術，接收 Hyperliquid 主動推播的 `UserFills` 事件。
-  - **頻率與成本**: 無需主動輪詢，資料隨成交即時推送（延遲毫秒級），且無 API 請求成本。
-- **連線可靠性**: 系統必須具備監聽連線狀態的能力，確保在網路波動斷線後能自動重新建立連線，並補抓斷線期間可能發生的訊號（若 API 支援）。
-- **訊號過濾**: 白名單機制，僅處理我們感興趣且在 CEX 有對應交易對的幣種。
+- **資料完整性與游標追蹤 (Cursor Tracking)**:
+  - 系統需記錄最後處理的 `block_height` 或 `tx_time` 至持久化儲存 (SQLite)。
+  - **斷線恢復**: 重連時需檢查當前區塊高度與最後記錄的差異 (Gap Detection)。
+    - 若差距 ≤ `BACKFILL_WINDOW` (例如最近 200 區塊)，以 REST 抓取補齊，並透過 Dedup 流程再次檢查。
+    - 若差距 > `BACKFILL_WINDOW`，立即進入「安全停機 (Halt)」並發送警報，避免在資料不完整時繼續交易。
+  - **毒藥訊息處理 (Poison Message)**: 對於無法解析或驗證失敗的訊息，應隔離記錄並繼續處理下一筆，避免卡死整個 Pipeline。
+- **冪等性 (Idempotency)**:
+  - 嚴格的去重機制：基於 `transaction_hash` + `event_index` 進行唯一性檢查。
+  - 去重資料保存於 SQLite，需設置 TTL（例如 24 小時）與定期清理；重複訊號應被靜默丟棄 (Silent Drop)，僅在 Debug 模式下記錄。
 
-### 2.2 跨所執行與映射 (Output)
-- **交易所介接**: 使用 `CCXT` 函式庫連接 Binance USDT-M 合約交易介面。
-- **幣種映射 (Symbol Mapping)**:
-  - **初期限制 (Initial Phase)**: 為確保系統穩定性，初期**僅支援 BTC** (Hyperliquid: `BTC` -> Binance: `BTC/USDT`)。
-  - 系統需維護一份映射表，未來可擴充至 ETH, SOL 等主流幣。
-  - **若無對應幣種或未在白名單內**: 系統自動忽略該訊號 (Skip) 並記錄 Log。
+### 2.2 跨所執行與倉位管理 (Execution & Management)
+- **訂單生命週期 (Order FSM)**:
+  - 支援完整狀態流轉：`PENDING` -> `SUBMITTED` -> `PARTIALLY_FILLED` -> `FILLED` / `CANCELED` / `EXPIRED` / `REJECTED` / `UNKNOWN` (網路中斷或回報缺失)。
+  - **超時處理**: 若訂單長時間未成交 (Time-in-Force)，需自動撤單。
+  - **Idempotent clientOrderId**: `clientOrderId = hl-{tx_hash}-{nonce}`，確保重試或斷線重送不會重複開倉。
+- **定期對帳 (Periodic Reconciliation)**:
+  - 系統需有一個獨立的背景任務 (Loop)，定期 (e.g., 每 1 分鐘) 比對「本地資料庫記錄的倉位」與「Binance 實際倉位」。
+  - **分級動作**：偏差 < `warn_threshold` 記錄並通知；偏差 ≥ `critical_threshold` 發出 Critical Alert，可選擇自動平倉或補單 (Auto-Resolve)。
+- **交易規則檢查 (Binance Filters)**:
+  - 在發送訂單前，必須檢查：
+    - `MinQty` (最小下單數量)
+    - `StepSize` (數量精度)
+    - `MinNotional` (最小名義價值，如 5 USDT)
+  - 未通過檢查的訂單應在本地直接拒絕，不發送至交易所。
 
-### 2.2 資金管理與倉位計算 (Money Management) - **核心重點**
-系統需支援多種倉位計算模式，使用者可透過設定檔切換：
+### 2.3 資金管理 (Money Management)
+- **輸入資料新鮮度 (Freshness Check)**:
+  - 若依賴外部數據（如大戶餘額 API、凱利參數），需檢查數據更新時間。若數據過期 (Stale > 1 hour)，禁止開新倉。
+- **倉位計算模式**:
+  - 支援 `Fixed Amount`, `Proportional`, `Kelly Criterion`。
+  - **最大加倉限制 (Max Add-on)**: 針對單一幣種設定最大加倉次數或總金額，防止金字塔式加倉導致風險失控。
 
-1.  **固定金額模式 (Fixed Amount)**:
-    - 無論大戶下單金額大小，我方每筆交易固定下單 $X USD。
-    - *適用場景*: 測試階段或小額驗證。
+### 2.4 風險控制 (Risk Control)
+- **價格滑點與保護**:
+  - **價格基準**: 使用 Binance 的 **Mark Price (標記價格)** 進行比對。
+  - **滑點限制**: 同時檢查百分比偏差與絕對偏差 (USD)。若任一超標 (`Max_Slippage%` 或 `Max_Slippage_USD`)，則放棄交易並記錄。
+- **槓桿與保證金模式**:
+  - 系統需明確指定並檢查每個幣種的模式（如：逐倉 Isolated 5x）。若設定不符，應嘗試調整或報錯。
+- **模擬模式 (Dry-Run)**:
+  - **隔離副作用**: 在 Dry-Run 模式下，嚴格禁止任何對外的「寫入」操作 (POST/DELETE)，並於啟動時進行自檢，若發現可寫路徑未被攔截則拒絕啟動。
+  - **狀態模擬**: 需在記憶體中維護虛擬餘額與倉位，確保模擬測試的連續性與真實性。
 
-2.  **等比例模式 (Proportional)**:
-    - 依據大戶下單金額佔其（估算）總資產的比例，應用於我方帳戶。
-    - *公式*: `My_Order_Size = My_Balance * (Whale_Order_Size / Whale_Estimated_Balance)`
+### 2.5 可觀測性與儲存 (Observability & Storage)
+- **資料庫 (SQLite)**:
+  - 使用 SQLite 儲存交易歷史 (`trade_history`)、去重快取 (`processed_hashes`) 與系統狀態 (`system_state`)。
+  - 啟用 WAL、設定 `busy_timeout`，採一執行緒一連線；索引：`processed_hashes(tx_hash)`、`trade_history(correlation_id)`；`processed_hashes` 需有 TTL 清理任務；每日備份並驗證可還原性。
+- **關鍵指標 (Metrics)**:
+  - 記錄 `E2E Latency` (鏈上成交 -> CEX 上鏈)、`Fill Ratio` (成交率)、`Slippage` (實際滑點)、`Gap Count`、`Replay Drops`、`Reconciliation Drift`、`429 Cooldown 次數`。
+- **日誌與追蹤**:
+  - 全鏈路 `correlation_id` 追蹤。
+  - **敏感資料遮蔽 (Redaction)**: 日誌中嚴禁出現 API Key 或完整私鑰。
 
-3.  **凱利公式模式 (Kelly Criterion)**:
-    - 基於大戶的歷史勝率與盈虧比，動態計算最佳下注比例。
-    - *公式*: $f = \frac{bp - q}{b}$
-        - $f$: 下注比例 (需支援凱利乘數，如 0.5x Kelly 以降低風險)
-        - $b$: 盈虧比 (Profit Factor)
-        - $p$: 勝率 (Win Rate)
-        - $q$: 敗率 (1-p)
-    - *參數來源*: 使用者需在設定檔提供該大戶的歷史 $p$ 與 $b$ 值（可由回測報告取得）。
+## 3. 配置與版本治理 (Config & Versioning)
+- `settings.yaml` 必須包含 `config_version` 與 `config_hash`；對未知欄位應 fail-fast，避免拼字錯誤。
+- 部署變更需記錄 `config_hash` 至 `system_state`，以利審計。
 
-### 2.3 風險控制與防呆 (Risk Control)
-- **資金佔用率監控 (Capital Utilization Monitoring)**:
-  - **定義**: `已使用保證金 (Used Margin) / 帳戶總權益 (Account Value)`
-  - **軟性警戒 (Soft Limit, e.g., 70%)**: 當佔用率超過此數值，發送黃色警告通知，提醒使用者注意水位。
-  - **硬性限制 (Hard Limit, e.g., 90%)**: 當佔用率超過此數值，系統**強制拒絕**所有「新開倉 (Open)」請求，僅允許執行「平倉 (Close)」指令以釋放保證金。
-
-- **餘額不足處理 (Insufficient Balance Handling)**:
-  - 若計算出的 `Target Size` > `Available Margin`，系統採取**放棄交易 (Skip)** 策略。
-  - 不進行降級下單，直接記錄 Error 日誌並發送通知，避免無效的小額開倉或破壞資金模型。
-
-- **最小下單門檻**: 若計算出的金額低於交易所規定的最小下單額 (Min Order Size)，則放棄該筆交易。
-- **最大持倉限制**: 設定單一幣種或總帳戶的最大持倉上限，超過則不再加倉。
-
-### 2.4 通知與紀錄系統 (Notification & Logging)
-- **即時通知 (Telegram - Optional)**:
-  - 系統支援 Telegram Bot 通知。使用者可於設定檔決定是否開啟 (`enabled: true/false`)。
-  - **通知事件**: 大戶交易偵測、跟單成功、跟單失敗（含原因）、資金水位警告、系統異常。
-- **數據保存 (CSV - Local)**:
-  - 為便於事後分析且降低複雜度，系統將所有完成的跟單交易結果記錄於本地 `trade_history.csv`。
-  - **記錄欄位**: `Time`, `Target_Tx_ID`, `Symbol`, `Side`, `Price`, `Quantity`, `Fee`, `PnL_Estimate`, `Status` (Success/Failed/Skipped)。
-- **日誌紀錄 (Logs)**:
-  - 詳盡的日誌紀錄存於 `logs/trading.log`，包含 WebSocket 連線狀態、心跳包紀錄與所有計算過程，用於系統偵錯。
-
-## 3. 非功能需求 (Non-Functional Requirements)
-- **可靠性**: 具備斷線自動重連機制。
-- **安全性**: API Private Key 必須加密儲存或僅透過環境變數讀取，不得明文寫入程式碼。
-- **可維護性**: 程式碼需模組化，策略邏輯與執行邏輯分離。
+## 4. 啟動與運行流程 (Startup & Runbook)
+- **單一入口指令**: 以單一指令啟動全流程，例如 `python main.py --mode {live|dry-run|backfill-only}`；禁止人工逐檔啟動以避免順序錯誤。
+- **執行順序 (必須序列化)**:
+  1. 載入 `settings.yaml` 並進行 Schema 驗證；記錄 `config_hash`。
+  2. 初始化 SQLite（WAL、busy_timeout、TTL 清理排程）。
+  3. 啟動即跑一次 Reconciliation；若偏差達 critical 閾值，進入安全模式（停開新倉）。
+  4. Gap 回補：依 `cursor` + `BACKFILL_WINDOW` 抓歷史，經 Dedup 後入隊列；若超窗則安全停機 + 警報。
+  5. 啟動 Monitor / Strategy / Executor（共用 Rate Limiter）與 Notifier/Telemetry。
+  6. 進入主循環；關閉時刷新隊列並更新 `cursor`/`system_state`。
+- **模式旗標**:
+  - `live`: 正常實盤。
+  - `dry-run`: 禁止任何對外寫入，使用虛擬餘額/倉位。
+  - `backfill-only`: 僅執行 Gap 回補與 Dedup，不下單，用於冷啟或資料修復。
 
 ---
-*Last Updated: 2026-01-13*
+*Last Updated: 2026-01-13 (v1.2)*
