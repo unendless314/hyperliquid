@@ -81,7 +81,7 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     _assert_in("copy_mode", copy_mode, {"fixed_amount", "proportional", "kelly"})
 
     # Numeric validations
-    for name in ("fixed_amount_usd", "max_position_size_usd", "min_order_size_usd"):
+    for name in ("max_position_size_usd", "min_order_size_usd"):
         if name in settings:
             _assert_positive(name, float(settings[name]), allow_zero=False)
 
@@ -97,6 +97,10 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
         _assert_between("kelly_win_rate", float(settings["kelly_win_rate"]), 0.0, 1.0)
         _assert_positive("kelly_profit_factor", float(settings["kelly_profit_factor"]))
         _assert_between("kelly_multiplier", float(settings["kelly_multiplier"]), 0.0, 1.0)
+    elif copy_mode == "fixed_amount":
+        if "fixed_amount_usd" not in settings:
+            raise SettingsValidationError("fixed_amount_usd is required when copy_mode=fixed_amount")
+        _assert_positive("fixed_amount_usd", float(settings["fixed_amount_usd"]))
 
     # Capital utilization thresholds
     soft = float(settings["capital_utilization_soft_limit"])
