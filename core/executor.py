@@ -10,42 +10,7 @@ import random
 import time
 from typing import Optional
 
-
-class SimpleRateLimiter:
-    """Tokenless limiter enforcing min interval between operations."""
-
-    def __init__(self, min_interval_sec: float = 0.2):
-        self.min_interval = min_interval_sec
-        self._lock = asyncio.Lock()
-        self._last = 0.0
-
-    async def acquire(self):
-        async with self._lock:
-            now = time.monotonic()
-            wait = self.min_interval - (now - self._last)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            self._last = time.monotonic()
-
-
-class CircuitBreaker:
-    def __init__(self, failure_threshold: int = 3, cooldown_seconds: float = 5.0):
-        self.failure_threshold = failure_threshold
-        self.cooldown_seconds = cooldown_seconds
-        self.failures = 0
-        self.open_until = 0.0
-
-    def allow(self) -> bool:
-        return time.monotonic() >= self.open_until
-
-    def record_success(self):
-        self.failures = 0
-
-    def record_failure(self):
-        self.failures += 1
-        if self.failures >= self.failure_threshold:
-            self.open_until = time.monotonic() + self.cooldown_seconds
-            self.failures = 0
+from utils.rate_limiters import CircuitBreaker, SimpleRateLimiter
 
 
 class Executor:
@@ -60,6 +25,8 @@ class Executor:
         max_submit_retries: int = 3,
         base_retry_backoff: float = 0.5,
         max_retry_backoff: float = 2.0,
+        rate_limiter: Optional[SimpleRateLimiter] = None,
+        circuit_breaker: Optional[CircuitBreaker] = None,
     ):
         self.exec_queue = exec_queue
         self.db_conn = db_conn
@@ -71,8 +38,9 @@ class Executor:
         self.base_retry_backoff = base_retry_backoff
         self.max_retry_backoff = max_retry_backoff
         self._stopped = asyncio.Event()
-        self._rate_limiter = SimpleRateLimiter(min_interval_sec=0.1)  # ~10 rps default
-        self._breaker = CircuitBreaker()
+        # Allow sharing the same limiter/breaker across submit/poll and future components
+        self._rate_limiter = rate_limiter or SimpleRateLimiter(min_interval_sec=0.1)  # ~10 rps default
+        self._breaker = circuit_breaker or CircuitBreaker()
 
     async def run(self):
         while not self._stopped.is_set():
@@ -136,7 +104,7 @@ class Executor:
                 return
 
         if not self._breaker.allow():
-            cooldown = max(self._breaker.open_until - time.monotonic(), 0)
+            cooldown = self._breaker.cooldown_remaining
             print(f"[EXECUTOR] circuit open, dropping order_request; cooldown_remaining={cooldown:.2f}s")
             self._record_trade(
                 correlation_id,
@@ -212,6 +180,7 @@ class Executor:
             while True:
                 attempt += 1
                 try:
+                    await self._rate_limiter.acquire()
                     order = await self.ccxt_client.create_order(
                         symbol, type="market", side=side, amount=order_qty, params=params
                     )
@@ -244,9 +213,14 @@ class Executor:
 
         deadline = time.monotonic() + self.submit_timeout_sec
         while time.monotonic() < deadline and not self._stopped.is_set():
+            if not self._breaker.allow():
+                await asyncio.sleep(min(self.poll_interval_sec, self._breaker.cooldown_remaining))
+                continue
             try:
+                await self._rate_limiter.acquire()
                 order = await self.ccxt_client.fetch_order(exchange_order_id, symbol=symbol)
                 status = (order.get("status") or "").upper()
+                self._breaker.record_success()
                 if status in {"CLOSED", "FILLED"}:
                     return "FILLED"
                 if status in {"CANCELED", "CANCELLED"}:
@@ -254,8 +228,9 @@ class Executor:
                 if status in {"EXPIRED", "REJECTED"}:
                     return status
             except Exception:  # pragma: no cover - defensive
-                pass
+                self._breaker.record_failure()
             await asyncio.sleep(self.poll_interval_sec)
+        self._breaker.record_failure()
         return "UNKNOWN"
 
     def _build_client_order_id(self, msg: dict) -> str:

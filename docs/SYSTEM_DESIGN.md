@@ -124,5 +124,10 @@
 - `enable_ws_ingest`: 是否啟動 Hyperliquid WS 監控。
 - `hyperliquid_ws_url`: WS 端點。
 
+### 6.4 Rate Limit / Circuit 配置參數
+- `rate_limit_min_interval_sec`: 共享限速器的最小間隔（秒），用於下單提交與狀態輪詢，預設 0.1 秒。
+- `circuit_failure_threshold`: 連續失敗達此次數即打開斷路器並進入冷卻，預設 3。
+- `circuit_cooldown_seconds`: 斷路器冷卻時間（秒），預設 5 秒；冷卻期間提交與輪詢會被跳過或等待。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

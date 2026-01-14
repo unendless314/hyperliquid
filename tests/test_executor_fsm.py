@@ -5,6 +5,7 @@ import pytest
 
 from core.executor import Executor
 from utils.db import init_sqlite
+from utils.rate_limiters import SimpleRateLimiter
 
 
 class FlakyCcxt:
@@ -27,7 +28,16 @@ async def test_executor_retries_ccxt_submit_and_succeeds():
     conn = init_sqlite(":memory:")
     exec_queue: asyncio.Queue = asyncio.Queue()
     ccxt = FlakyCcxt(fail_times=2)
-    executor = Executor(exec_queue, conn, ccxt_client=ccxt, max_submit_retries=3, base_retry_backoff=0.01, max_retry_backoff=0.02)
+    fast_limiter = SimpleRateLimiter(min_interval_sec=0.0)
+    executor = Executor(
+        exec_queue,
+        conn,
+        ccxt_client=ccxt,
+        max_submit_retries=3,
+        base_retry_backoff=0.01,
+        max_retry_backoff=0.02,
+        rate_limiter=fast_limiter,
+    )
 
     task = asyncio.create_task(executor.run())
 

@@ -28,6 +28,7 @@ from utils.validations import SettingsValidationError, validate_settings
 from utils.notifications import Notifier
 from utils.hyperliquid_rest import HyperliquidRestAdapter
 from utils.hyperliquid_ws import HyperliquidWsAdapter
+from utils.rate_limiters import SimpleRateLimiter, CircuitBreaker
 
 
 def parse_args():
@@ -63,6 +64,11 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     """
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    shared_rate_limiter = SimpleRateLimiter(min_interval_sec=settings.get("rate_limit_min_interval_sec", 0.1))
+    shared_circuit_breaker = CircuitBreaker(
+        failure_threshold=settings.get("circuit_failure_threshold", 3),
+        cooldown_seconds=settings.get("circuit_cooldown_seconds", 5.0),
+    )
 
     rest_client = None
     if settings.get("enable_rest_backfill"):
@@ -91,7 +97,13 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         cleanup_interval_seconds=settings["dedup_cleanup_interval_seconds"],
     )
     strategy = Strategy(monitor_queue, exec_queue, settings)
-    executor = Executor(exec_queue, conn, mode=settings.get("mode", "live"))
+    executor = Executor(
+        exec_queue,
+        conn,
+        mode=settings.get("mode", "live"),
+        rate_limiter=shared_rate_limiter,
+        circuit_breaker=shared_circuit_breaker,
+    )
     reconciler = Reconciler(conn)
     notifier = Notifier()
 

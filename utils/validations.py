@@ -148,6 +148,14 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     )
     _assert_positive("dedup_cleanup_interval_seconds", dedup_cleanup_interval_seconds)
 
+    rate_limit_min_interval_sec = float(settings.get("rate_limit_min_interval_sec", 0.1))
+    _assert_positive("rate_limit_min_interval_sec", rate_limit_min_interval_sec)
+
+    circuit_failure_threshold = _coerce_int("circuit_failure_threshold", settings.get("circuit_failure_threshold", 3))
+    _assert_positive("circuit_failure_threshold", circuit_failure_threshold)
+    circuit_cooldown_seconds = float(settings.get("circuit_cooldown_seconds", 5.0))
+    _assert_positive("circuit_cooldown_seconds", circuit_cooldown_seconds, allow_zero=False)
+
     enable_rest_backfill = bool(settings.get("enable_rest_backfill", False))
     rest_base_url = settings.get("hyperliquid_rest_base_url", "https://api.hyperliquid.xyz/info")
     if not isinstance(rest_base_url, str) or not rest_base_url.strip():
@@ -178,6 +186,9 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     validated["backfill_window"] = backfill_window
     validated["dedup_ttl_seconds"] = dedup_ttl_seconds
     validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
+    validated["rate_limit_min_interval_sec"] = rate_limit_min_interval_sec
+    validated["circuit_failure_threshold"] = circuit_failure_threshold
+    validated["circuit_cooldown_seconds"] = circuit_cooldown_seconds
     validated["enable_rest_backfill"] = enable_rest_backfill
     validated["hyperliquid_rest_base_url"] = rest_base_url
     validated["max_stale_ms"] = max_stale_ms
