@@ -104,3 +104,30 @@ async def test_reconciler_warn_only_no_auto_close():
 
     assert any("WARN" in m for m in notifier.msgs)
     assert not ccxt.created
+
+
+@pytest.mark.asyncio
+async def test_reconciler_alert_cooldown_suppresses_spam():
+    conn = init_sqlite(":memory:")
+    seed_trades(conn, "BTC/USDT", 0.0)  # db sees 0
+    notifier = StubNotifier()
+    ccxt = StubCcxt([{"symbol": "BTC/USDT", "notional": 100.0}])  # consistent drift each loop
+
+    reconciler = Reconciler(
+        conn,
+        ccxt_client=ccxt,
+        notifier=notifier,
+        interval_sec=0.01,
+        warn_threshold=0.01,
+        critical_threshold=0.05,
+        auto_resolve_mode="off",
+        alert_cooldown_sec=0.05,
+    )
+    task = asyncio.create_task(reconciler.run())
+    await asyncio.sleep(0.12)  # multiple loops; cooldown should gate most
+    await reconciler.stop()
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    assert 1 <= len(notifier.msgs) <= 3  # cooldown reduces spam (would be ~12 without gating)

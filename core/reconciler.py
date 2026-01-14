@@ -21,6 +21,7 @@ class Reconciler:
         warn_threshold: float = 0.01,  # 1% drift
         critical_threshold: float = 0.05,  # 5% drift
         auto_resolve_mode: str = "off",  # off | alert-only | auto-close
+        alert_cooldown_sec: float = 30.0,
     ):
         self.db_conn = db_conn
         self.ccxt_client = ccxt_client
@@ -30,14 +31,21 @@ class Reconciler:
         self.critical_threshold = critical_threshold
         self.auto_resolve_mode = auto_resolve_mode
         self._stopped = asyncio.Event()
+        self.alert_cooldown_sec = alert_cooldown_sec
+        self._last_alert_at: Dict[str, float] = {}
 
     async def run(self):
+        # Startup reconcile immediately
+        await self._reconcile_safe()
         while not self._stopped.is_set():
-            try:
-                await self._reconcile_once()
-            except Exception as exc:  # pragma: no cover - defensive
-                print(f"[RECONCILER] error: {exc}")
             await asyncio.sleep(self.interval_sec)
+            await self._reconcile_safe()
+
+    async def _reconcile_safe(self):
+        try:
+            await self._reconcile_once()
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[RECONCILER] error: {exc}")
 
     async def _reconcile_once(self):
         db_positions = self._load_db_positions()
@@ -58,8 +66,7 @@ class Reconciler:
             level = "critical" if drift_pct >= self.critical_threshold else "warn"
             msg = f"[RECONCILE][{level.upper()}] {symbol} drift={drift} (ex_notional={ex_notional}, db={db_pos})"
             print(msg)
-            if self.notifier:
-                await self.notifier.send(msg)
+            await self._notify(symbol, level, msg)
 
             if level == "critical" and self.auto_resolve_mode == "auto-close" and ex_notional != 0 and self.ccxt_client:
                 await self._auto_close(symbol, ex)
@@ -124,11 +131,23 @@ class Reconciler:
         amount = abs(base)
         try:
             await self.ccxt_client.create_order(symbol, type="market", side=side, amount=amount)
-            if self.notifier:
-                await self.notifier.send(f"[RECONCILE][AUTO-CLOSE] {symbol} {side} {amount}")
+            rationale = f"notional={notional}, base={base}, mark_price={mark_price}"
+            await self._notify(symbol, "critical", f"[RECONCILE][AUTO-CLOSE] {symbol} {side} {amount} ({rationale})")
         except Exception as exc:
-            if self.notifier:
-                await self.notifier.send(f"[RECONCILE][AUTO-CLOSE][FAIL] {symbol} {exc}")
+            await self._notify(symbol, "critical", f"[RECONCILE][AUTO-CLOSE][FAIL] {symbol} {exc}")
 
     async def stop(self):
         self._stopped.set()
+
+    async def _notify(self, symbol: str, level: str, message: str):
+        if not self.notifier:
+            return
+        import time
+
+        now = time.time()
+        key = f"{symbol}:{level}"
+        last = self._last_alert_at.get(key, 0)
+        if now - last < self.alert_cooldown_sec:
+            return
+        self._last_alert_at[key] = now
+        await self.notifier.send(message)
