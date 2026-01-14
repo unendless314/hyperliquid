@@ -13,8 +13,8 @@
 
 *   **Monitor (Ingestion Layer)**:
     *   **WebSocket Client**: 維護與 Hyperliquid 的長連線。
-    *   **Gap Detector**: 比對 `latest_block_height` 與 DB 中的 `cursor`。
-        * 若落差 ≤ `BACKFILL_WINDOW` (例：200 區塊)，以 REST 回補並經過 Dedup 流程。
+    *   **Gap Detector**: 比對「最新游標」與 DB 中的 `cursor`（預設 timestamp 毫秒）。
+        * 若落差 ≤ `BACKFILL_WINDOW`（預設 900_000 ms / 15 分鐘），以 REST 回補並經過 Dedup 流程。
         * 若落差 > `BACKFILL_WINDOW`，觸發安全停機 (Halt) + Alert，避免在資料缺口下繼續交易。
     *   **Dedup Gatekeeper**: 查詢 SQLite `processed_txs` 表 (含 `tx_hash`,`event_index`,`symbol`)；若存在 -> Drop；若無 -> Insert 並傳遞。
 
@@ -26,7 +26,7 @@
 *   **Executor (Action Layer)**:
     *   **Order FSM**: 管理訂單狀態 (Submit -> Monitor -> Finalize)，包含 `UNKNOWN`/`STUCK` 狀態供 Reconciler 後續處理。
     *   **Smart Retry**: 實作帶有 Jitter 的指數退避 (Exponential Backoff)，與 Status Poller/Query 共用同一組 Rate Limiter/Backoff。
-    *   **Idempotency Key**: `clientOrderId = hl-{tx_hash}-{nonce}`，確保重試或斷線重送不會重複開倉。
+    *   **Idempotency Key**: `clientOrderId = hl-{tx_hash}-{nonce}`（nonce 可為本地單調遞增或隨機），確保重試或斷線重送不會重複開倉。
 
 *   **Reconciler (Safety Layer)**:
     *   **非同步迴圈**: 每 X 秒執行一次。
@@ -108,8 +108,8 @@
   - `backfill-only`: 僅做 Gap 回補與 Dedup，同步游標，不觸發下單，適用冷啟/修復。
 
 ### 6.1 Monitor / Backfill 配置參數
-- `cursor_mode`: `block` (優先使用區塊高度) 或 `timestamp`（毫秒）；避免混用單位導致誤判 Gap。
-- `backfill_window`: 允許的最大游標差距（超出即安全停機）。
+- `cursor_mode`: **預設 `timestamp`（毫秒）**；REST userFills 以時間戳為主，建議以 timestamp 為主游標，`block` 僅作輔助，避免混用單位。
+- `backfill_window`: **預設 900_000 ms（15 分鐘）**；超出即 halt + alert。
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）。
 - `dedup_cleanup_interval_seconds`: 去重清理排程間隔（秒）。
 - `enable_rest_backfill`: 是否啟用 REST 回補；啟用時 Monitor 會使用 Hyperliquid REST adapter。
@@ -119,15 +119,21 @@
 - `max_stale_ms`: 最大可接受資料延遲（毫秒），超過即丟棄事件。
 - `binance_filters`: 交易對風控設定，包含 `min_qty`, `step_size`, `min_notional`，下單前本地檢查以符合交易所限制。
   - 檢查對象為「實際下單的目標數量」(`order_qty = size_usd / price`)，避免因 Hyperliquid 原始成交量過小/過大造成誤判。
+- Kelly sizing：可採用靜態配置（操作者週/月更新）；程式端僅檢查必要參數與範圍，不強制資料「新鮮度」。
 
 ### 6.3 WebSocket 配置參數
 - `enable_ws_ingest`: 是否啟動 Hyperliquid WS 監控。
 - `hyperliquid_ws_url`: WS 端點。
+- `ws_retry_backoff_initial` / `ws_retry_backoff_max`: WS 重連 backoff（秒），預設 1 / 5。
 
 ### 6.4 Rate Limit / Circuit 配置參數
 - `rate_limit_min_interval_sec`: 共享限速器的最小間隔（秒），用於下單提交與狀態輪詢，預設 0.1 秒。
 - `circuit_failure_threshold`: 連續失敗達此次數即打開斷路器並進入冷卻，預設 3。
 - `circuit_cooldown_seconds`: 斷路器冷卻時間（秒），預設 5 秒；冷卻期間提交與輪詢會被跳過或等待。
 
+### 6.5 通知/觀測配置參數
+- `telegram_enabled`, `telegram_bot_token`, `telegram_chat_id`, `telegram_base_url`, `telegram_dedup_cooldown_sec`: Telegram 告警設定與去重冷卻；未啟用時使用 stdout fallback。
+- `metrics_dump_interval_sec`: 週期性將累積 metrics 以 stdout `[METRICS] {...}` 形式輸出，並同步 append 至 `logs/metrics.log`（滾動）；預設 60 秒。當前 metrics 包含 gap 超窗次數、backfill fetched 數量、WS error/recreate 次數，可後續接 Prometheus/OTLP。
+
 ---
-*Last Updated: 2026-01-13 (v1.2)*
+*Last Updated: 2026-01-14 (v1.2.1 — 文檔已定版，程式稍後對齊)*

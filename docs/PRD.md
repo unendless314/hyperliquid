@@ -11,19 +11,20 @@
 ### 2.1 監控與訊號捕捉 (Input)
 - **資料完整性與游標追蹤 (Cursor Tracking)**:
   - 系統需記錄最後處理的 `block_height` 或 `tx_time` 至持久化儲存 (SQLite)。
-  - **斷線恢復**: 重連時需檢查當前區塊高度與最後記錄的差異 (Gap Detection)。
-    - 若差距 ≤ `BACKFILL_WINDOW` (例如最近 200 區塊)，以 REST 抓取補齊，並透過 Dedup 流程再次檢查。
+  - **斷線恢復**: 重連時需檢查最新游標與最後記錄的差異 (Gap Detection)。
+    - 預設游標模式為 **timestamp (毫秒)**，`BACKFILL_WINDOW` 預設 **900_000 ms (15 分鐘)**。
+    - 若差距 ≤ `BACKFILL_WINDOW`，以 REST 抓取補齊，並透過 Dedup 流程再次檢查。
     - 若差距 > `BACKFILL_WINDOW`，立即進入「安全停機 (Halt)」並發送警報，避免在資料不完整時繼續交易。
   - **毒藥訊息處理 (Poison Message)**: 對於無法解析或驗證失敗的訊息，應隔離記錄並繼續處理下一筆，避免卡死整個 Pipeline。
 - **冪等性 (Idempotency)**:
-  - 嚴格的去重機制：基於 `transaction_hash` + `event_index` 進行唯一性檢查。
+  - 嚴格的去重機制：基於 `transaction_hash` + `event_index` + `symbol` 進行唯一性檢查，避免跨交易對碰撞。
   - 去重資料保存於 SQLite，需設置 TTL（例如 24 小時）與定期清理；重複訊號應被靜默丟棄 (Silent Drop)，僅在 Debug 模式下記錄。
 
 ### 2.2 跨所執行與倉位管理 (Execution & Management)
 - **訂單生命週期 (Order FSM)**:
   - 支援完整狀態流轉：`PENDING` -> `SUBMITTED` -> `PARTIALLY_FILLED` -> `FILLED` / `CANCELED` / `EXPIRED` / `REJECTED` / `UNKNOWN` (網路中斷或回報缺失)。
   - **超時處理**: 若訂單長時間未成交 (Time-in-Force)，需自動撤單。
-  - **Idempotent clientOrderId**: `clientOrderId = hl-{tx_hash}-{nonce}`，確保重試或斷線重送不會重複開倉。
+  - **Idempotent clientOrderId**: `clientOrderId = hl-{tx_hash}-{nonce}`（nonce 為本地單調遞增/隨機），確保重試或斷線重送不會重複開倉。
 - **定期對帳 (Periodic Reconciliation)**:
   - 系統需有一個獨立的背景任務 (Loop)，定期 (e.g., 每 1 分鐘) 比對「本地資料庫記錄的倉位」與「Binance 實際倉位」。
   - **分級動作**：偏差 < `warn_threshold` 記錄並通知；偏差 ≥ `critical_threshold` 發出 Critical Alert，可選擇自動平倉或補單 (Auto-Resolve)。
@@ -80,8 +81,8 @@
   - `backfill-only`: 僅執行 Gap 回補與 Dedup，不下單，用於冷啟或資料修復。
 
 ### 配置補充（Monitor / Backfill）
-- `cursor_mode`: `block` 或 `timestamp`（毫秒）；避免混用單位導致錯誤 Gap 判斷。
-- `backfill_window`: 允許的最大游標差距（超窗則安全停機）。
+- `cursor_mode`: **預設 `timestamp`（毫秒）**；REST userFills 僅回傳時間戳，建議以 timestamp 為主游標。`block` 只作輔助，避免混用單位導致錯誤 Gap 判斷。
+- `backfill_window`: 建議 900_000 ms（15 分鐘）；游標差距超過即安全停機並告警。
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）；`dedup_cleanup_interval_seconds`: 清理週期（秒）。
 - `enable_rest_backfill`: 是否啟用 Hyperliquid REST 回補；`hyperliquid_rest_base_url`: 回補 API base URL（預設官方 info 端點）。
 
@@ -89,10 +90,12 @@
 - `max_stale_ms`: 事件資料最大片延遲，超過即丟棄。
 - `binance_filters`: 依交易對設定 `min_qty`, `step_size`, `min_notional`，下單前本地檢查。
   - 檢查使用的是「預計下單的目標數量」(`order_qty = size_usd / price`)，而非 Hyperliquid 的原始成交數量，避免錯誤拒單。
+- Kelly 參數可作為靜態設定（操作者週/月更新），程式僅驗證存在與範圍，不強制動態新鮮度。
 
 ### 配置補充（WebSocket Ingest）
 - `enable_ws_ingest`: 是否啟用 Hyperliquid WS 監控。
 - `hyperliquid_ws_url`: WS 端點（預設官方）。
 
 ---
-*Last Updated: 2026-01-13 (v1.2)*
+---
+*Last Updated: 2026-01-14 (v1.2.1 — 文檔已定版，程式稍後對齊)*

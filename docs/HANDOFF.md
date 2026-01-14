@@ -28,14 +28,12 @@
 - Integration（Binance testnet）：Happy path、429/backoff、WS 斷線重連+重播、部分成交+撤單、Reconciliation 偵測手動平倉。
 - Smoke：`--mode dry-run` 啟動流程是否阻斷寫入；`backfill-only` 是否更新 cursor 而不下單；服務任務崩潰是否觸發停機（框架已支持）。
 
-## 4. 待決策/開放議題
-- Gap 回補 REST 來源與 `BACKFILL_WINDOW` 具體數值。
-- Kelly 參數來源與「新鮮度」判斷（預設 1h？）是否可配置。
-- Metrics 與日誌格式（JSON vs text）、上報管道（暫列本地）。
-- run_id 是否需要（目前未實作，可後續加入）。
-- 游標語義：HL user_fills 無 block_height 時，目前以 timestamp_ms 作為 `last_processed_cursor`；若未來需要嚴格按區塊，需改為取得高度或獨立存時間/高度兩個游標。
-- Reconciler alert noise：尚無 cooldown，漂移持續會每輪提醒；可加冷卻/去重。
-- WS：無重連/backoff/backpressure；低頻可接受，若上線建議補強。
+## 4. 待決策/開放議題（更新 2026-01-14）
+- 游標/回補：決定為 timestamp 主游標；`BACKFILL_WINDOW` 建議 900_000 ms（15 分鐘），超窗 halt + alert。
+- Kelly：靜態手動更新，無過期告警。
+- Metrics/日誌：維持 JSON stdout + metrics dump；健康指標為主，暫不導出。
+- run_id：尚未實作（成本低，若需審計可後續加入）。
+- Dry-run 外部寫阻斷：目前以禁 ccxt + MockExchange 為主，未做全局 HTTP/ccxt 攔截；若需更嚴格可後續加。
 
 ## 7. 新增待辦/提醒（2026-01-14）
 - Orchestrator mode handling：`mode` 預設應明確為 `live`；未知值應在設定驗證階段 fail-fast。backfill-only 停止條件目前以任務名稱判斷，可改為持有 monitor task handle 比對以避免名稱變動風險。
@@ -56,3 +54,23 @@
   - SQLite 目前單連線；若未來高併發/多進程，需考慮每任務獨立連線或集中寫入 queue。
   - 游標語義：HL user_fills 無 block_height 時，目前以 timestamp_ms 作為 `last_processed_cursor`；若未來需要嚴格按區塊，需改為取得高度或獨立存時間/高度兩個游標。
   - Hyperliquid REST 回補 adapter 已接好；若要跑實流量，建議在 adapter 內加入輕量 rate limiting/backoff，以免打爆公共端點。
+
+## 7. 狀態更新（2026-01-14）
+- 已完成：WS ingest/REST 回補骨架、Dedup/TTL、毒藥訊息隔離+TTL、策略風控/filters、Executor FSM+重試+斷路器、Reconciler + auto-close + cooldown、模式護欄（dry-run/backfill-only 禁 ccxt）、Telegram/STDOUT Notifier（速率限制+去重+錯誤警示）、結構化日誌、輕量 metrics（gap/WS/backfill）+ 週期 stdout dump、WS 重連/backoff 可配置且有測試。
+- 測試：pytest 43/43 綠（含 backfill-only smoke、poison handling、Telegram/notifier、WS 重連、dry-run guard 等）。
+
+## 8. 待辦事項（按實用性）
+### Must have（上線前）
+1) Dry-run 外部寫入阻斷：實測/自檢確保所有對外 POST/DELETE（ccxt/http 客戶端）被攔截；新增 smoke test 覆蓋。
+2) Metrics 充實：e2e latency、fill ratio、slippage、gap count、429/backoff、reconciliation drift；提供 Prometheus/OTLP 或更可用的輸出（現僅 stdout dump）。
+3) Strategy 完整度：實作 Kelly sizing；滑點雙閾值行為/測試；binance filter 邊界案例。
+4) Executor/Reconciler 韌性：新增 UNKNOWN/FAILED 原因分類、poll 專用 limiter（如需）、429/網路錯誤打點；Reconciler auto-close/漂移寫回 DB 或紀錄。
+5) Cursor/Backfill 報表與修復：gap/游標單位異常的告警/報表；REST 回補缺口摘要；WS 重播續接的穩定測試。
+6) CI/運維：移除 pytest-asyncio scope 警告；加 lint/format；模式未知值 fail-fast 已完成，保持。
+
+### Nice to have
+- Notifier 改用 message key（含 corr_id）去重，並支援更多管道。
+- Metrics reset/多進程安全；週期 dump 可選寫檔/推送。
+- 游標/回補可視化儀表（local dashboard）。
+- run_id 寫入 system_state 以利審計/追蹤。
+- Auto-close/修復動作的審計日誌與冷卻策略細化。
