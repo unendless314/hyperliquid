@@ -184,7 +184,8 @@ async def async_main():
         print(f"[BOOT][FAIL] {exc}", file=sys.stderr)
         sys.exit(1)
 
-    settings["mode"] = args.mode
+    mode = args.mode or "live"
+    settings["mode"] = mode
     setup_logger(level=settings.get("log_level", "INFO"), mode=settings["mode"])
 
     conn = init_sqlite(args.db)
