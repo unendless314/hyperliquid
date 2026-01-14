@@ -83,6 +83,7 @@
 - `cursor_mode`: `block` 或 `timestamp`（毫秒）；避免混用單位導致錯誤 Gap 判斷。
 - `backfill_window`: 允許的最大游標差距（超窗則安全停機）。
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）；`dedup_cleanup_interval_seconds`: 清理週期（秒）。
+- `enable_rest_backfill`: 是否啟用 Hyperliquid REST 回補；`hyperliquid_rest_base_url`: 回補 API base URL（預設官方 info 端點）。
 
 ---
 *Last Updated: 2026-01-13 (v1.2)*

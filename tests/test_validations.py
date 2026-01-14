@@ -75,3 +75,20 @@ def test_non_int_backfill_window_raises():
     cfg = minimal_settings(backfill_window="abc")
     with pytest.raises(SettingsValidationError):
         validate_settings(cfg)
+
+
+def test_rest_backfill_defaults_and_url_validation():
+    cfg = minimal_settings()
+    validated = validate_settings(cfg)
+    assert validated["enable_rest_backfill"] is False
+    assert validated["hyperliquid_rest_base_url"] == "https://api.hyperliquid.xyz/info"
+
+    cfg_bad_url = minimal_settings(hyperliquid_rest_base_url="")
+    with pytest.raises(SettingsValidationError):
+        validate_settings(cfg_bad_url)
+
+
+def test_rest_backfill_requires_timestamp_cursor():
+    cfg = minimal_settings(enable_rest_backfill=True, cursor_mode="block")
+    with pytest.raises(SettingsValidationError):
+        validate_settings(cfg)

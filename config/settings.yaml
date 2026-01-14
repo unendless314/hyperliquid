@@ -48,3 +48,5 @@ cursor_mode: "block"
 backfill_window: 200          # max allowable gap; beyond this triggers halt
 dedup_ttl_seconds: 86400      # dedup cache retention (24h)
 dedup_cleanup_interval_seconds: 300  # how often to clean dedup cache (seconds)
+enable_rest_backfill: false
+hyperliquid_rest_base_url: "https://api.hyperliquid.xyz/info"

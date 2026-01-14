@@ -148,11 +148,20 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     )
     _assert_positive("dedup_cleanup_interval_seconds", dedup_cleanup_interval_seconds)
 
+    enable_rest_backfill = bool(settings.get("enable_rest_backfill", False))
+    rest_base_url = settings.get("hyperliquid_rest_base_url", "https://api.hyperliquid.xyz/info")
+    if not isinstance(rest_base_url, str) or not rest_base_url.strip():
+        raise SettingsValidationError("hyperliquid_rest_base_url must be a non-empty string")
+    if enable_rest_backfill and cursor_mode != "timestamp":
+        raise SettingsValidationError("enable_rest_backfill requires cursor_mode='timestamp' because REST returns timestamps")
+
     validated = dict(settings)  # shallow copy
     validated["cursor_mode"] = cursor_mode
     validated["backfill_window"] = backfill_window
     validated["dedup_ttl_seconds"] = dedup_ttl_seconds
     validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
+    validated["enable_rest_backfill"] = enable_rest_backfill
+    validated["hyperliquid_rest_base_url"] = rest_base_url
 
     # Fill config_version if missing
     if not validated.get("config_version"):

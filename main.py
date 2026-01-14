@@ -26,6 +26,7 @@ from core.reconciler import Reconciler
 from utils.db import init_sqlite
 from utils.validations import SettingsValidationError, validate_settings
 from utils.notifications import Notifier
+from utils.hyperliquid_rest import HyperliquidRestAdapter
 
 
 def parse_args():
@@ -62,12 +63,19 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
+    rest_client = None
+    if settings.get("enable_rest_backfill"):
+        rest_client = HyperliquidRestAdapter(
+            wallet=settings["target_wallet"],
+            base_url=settings["hyperliquid_rest_base_url"],
+        )
+
     monitor = Monitor(
         monitor_queue,
         conn,
         settings,
         ws_client=None,
-        rest_client=None,
+        rest_client=rest_client,
         backfill_window=settings["backfill_window"],
         cursor_mode=settings["cursor_mode"],
         dedup_ttl_seconds=settings["dedup_ttl_seconds"],

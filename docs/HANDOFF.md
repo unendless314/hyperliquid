@@ -46,3 +46,4 @@
   - Notifier 尚未啟動為長駐任務；實作告警時請掛入事件管線。
   - SQLite 目前單連線；若未來高併發/多進程，需考慮每任務獨立連線或集中寫入 queue。
   - 游標語義：HL user_fills 無 block_height 時，目前以 timestamp_ms 作為 `last_processed_cursor`；若未來需要嚴格按區塊，需改為取得高度或獨立存時間/高度兩個游標。
+  - Hyperliquid REST 回補 adapter 已接好；若要跑實流量，建議在 adapter 內加入輕量 rate limiting/backoff，以免打爆公共端點。

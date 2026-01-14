@@ -112,6 +112,8 @@
 - `backfill_window`: 允許的最大游標差距（超出即安全停機）。
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）。
 - `dedup_cleanup_interval_seconds`: 去重清理排程間隔（秒）。
+- `enable_rest_backfill`: 是否啟用 REST 回補；啟用時 Monitor 會使用 Hyperliquid REST adapter。
+- `hyperliquid_rest_base_url`: Hyperliquid info API base URL（預設 `https://api.hyperliquid.xyz/info`）。
 
 ---
 *Last Updated: 2026-01-13 (v1.2)*
