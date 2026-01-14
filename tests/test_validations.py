@@ -102,3 +102,10 @@ def test_binance_filters_validation():
     cfg_bad = minimal_settings(binance_filters={"BTC/USDT": "oops"})
     with pytest.raises(SettingsValidationError):
         validate_settings(cfg_bad)
+
+
+def test_reconciler_defaults_present():
+    cfg = minimal_settings(enable_ws_ingest=False)
+    validated = validate_settings(cfg)
+    assert validated["enable_ws_ingest"] is False
+    assert validated["hyperliquid_ws_url"]
