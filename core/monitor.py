@@ -17,7 +17,14 @@ import time
 import logging
 from typing import Any, Optional, Callable
 
-from utils.db import get_system_state, set_system_state, cleanup_processed_txs, DEFAULT_DEDUP_TTL_SECONDS
+from utils.db import (
+    get_system_state,
+    set_system_state,
+    cleanup_processed_txs,
+    DEFAULT_DEDUP_TTL_SECONDS,
+    record_poison_message,
+    cleanup_poison_messages,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +199,7 @@ class Monitor:
 
         if not (tx_hash and symbol is not None):
             logger.warning("monitor_skip_malformed_event", extra={"event": raw})
+            record_poison_message(self.db_conn, "missing_fields", raw)
             return
 
         if not self._dedup_and_record(tx_hash, event_index, symbol, block_height, timestamp_ms):
@@ -260,6 +268,9 @@ class Monitor:
             removed = cleanup_processed_txs(self.db_conn, self.dedup_ttl_seconds)
             if removed:
                 logger.info("monitor_dedup_cleanup", extra={"removed": removed})
+            poison_removed = cleanup_poison_messages(self.db_conn, self.dedup_ttl_seconds)
+            if poison_removed:
+                logger.info("monitor_poison_cleanup", extra={"removed": poison_removed})
             await asyncio.sleep(self.cleanup_interval_seconds)
 
     async def _call_rest(self, method_name: str, *args, **kwargs):

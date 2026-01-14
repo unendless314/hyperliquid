@@ -31,6 +31,8 @@ class Executor:
         self.exec_queue = exec_queue
         self.db_conn = db_conn
         self.mode = mode
+        if mode == "dry-run" and ccxt_client is not None:
+            raise ValueError("dry-run mode must not use live ccxt_client (writes must be blocked)")
         self.ccxt_client = ccxt_client
         self.submit_timeout_sec = submit_timeout_sec
         self.poll_interval_sec = poll_interval_sec

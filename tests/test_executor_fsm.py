@@ -65,3 +65,14 @@ async def test_executor_retries_ccxt_submit_and_succeeds():
     statuses = {row[0] for row in cur.fetchall()}
     assert statuses >= {"SUBMITTED", "FILLED"}
     assert ccxt.calls == 3
+
+
+def test_executor_disallows_ccxt_in_dry_run():
+    conn = init_sqlite(":memory:")
+    exec_queue: asyncio.Queue = asyncio.Queue()
+
+    class DummyCcxt:
+        pass
+
+    with pytest.raises(ValueError):
+        Executor(exec_queue, conn, mode="dry-run", ccxt_client=DummyCcxt())

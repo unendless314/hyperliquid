@@ -37,6 +37,10 @@
 - Reconciler alert noise：尚無 cooldown，漂移持續會每輪提醒；可加冷卻/去重。
 - WS：無重連/backoff/backpressure；低頻可接受，若上線建議補強。
 
+## 7. 新增待辦/提醒（2026-01-14）
+- Orchestrator mode handling：`mode` 預設應明確為 `live`；未知值應在設定驗證階段 fail-fast。backfill-only 停止條件目前以任務名稱判斷，可改為持有 monitor task handle 比對以避免名稱變動風險。
+- Dry-run/backfill 自檢：啟動時驗證外部寫入是否全阻斷（dry-run），backfill-only 確保僅同步 cursor 不觸發 Strategy/Executor。
+- Cursor/Backfill hardening：REST 回補結果的毒藥訊息隔離、TTL 清理驗證、游標單位一致性報表；WS 重播續接測試。
 ## 5. 檔案導覽
 - 需求/設計：`docs/PRD.md`, `docs/SYSTEM_DESIGN.md`, 本檔 `docs/HANDOFF.md`
 - 設定：`config/settings.yaml`（僅示例，未 schema 檢查）、`config/.env.example`

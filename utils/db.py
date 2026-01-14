@@ -72,6 +72,33 @@ def get_system_state(conn: sqlite3.Connection, key: str) -> Optional[str]:
         cur.close()
 
 
+def record_poison_message(conn: sqlite3.Connection, reason: str, raw_event: dict) -> None:
+    cur = conn.cursor()
+    try:
+        import json
+
+        try:
+            raw_json = json.dumps(raw_event, ensure_ascii=False, default=str)
+        except Exception:
+            raw_json = repr(raw_event)
+        cur.execute(
+            "INSERT INTO poison_messages (reason, raw_event) VALUES (?, ?)",
+            (reason, raw_json),
+        )
+    finally:
+        cur.close()
+
+
+def cleanup_poison_messages(conn: sqlite3.Connection, ttl_seconds: int = DEFAULT_DEDUP_TTL_SECONDS) -> int:
+    cutoff = int(time.time()) - int(ttl_seconds)
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM poison_messages WHERE created_at < ?", (cutoff,))
+        return cur.rowcount
+    finally:
+        cur.close()
+
+
 def _apply_pragmas(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
     cur.executescript(
@@ -120,6 +147,13 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS system_state (
             key TEXT PRIMARY KEY,
             value TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS poison_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reason TEXT,
+            raw_event TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
         );
         """
     )

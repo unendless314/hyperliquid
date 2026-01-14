@@ -102,6 +102,7 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         dedup_ttl_seconds=settings["dedup_ttl_seconds"],
         cleanup_interval_seconds=settings["dedup_cleanup_interval_seconds"],
         notifier=notifier,
+        run_once=settings.get("mode") == "backfill-only",
     )
     strategy = Strategy(monitor_queue, exec_queue, settings)
     executor = Executor(
@@ -113,12 +114,16 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     )
     reconciler = Reconciler(conn, notifier=notifier)
 
-    tasks = [
-        asyncio.create_task(monitor.run(), name="monitor"),
-        asyncio.create_task(strategy.run(), name="strategy"),
-        asyncio.create_task(executor.run(), name="executor"),
-        asyncio.create_task(reconciler.run(), name="reconciler"),
-    ]
+    tasks = [asyncio.create_task(monitor.run(), name="monitor")]
+    mode = settings.get("mode")
+    if mode != "backfill-only":
+        tasks.extend(
+            [
+                asyncio.create_task(strategy.run(), name="strategy"),
+                asyncio.create_task(executor.run(), name="executor"),
+                asyncio.create_task(reconciler.run(), name="reconciler"),
+            ]
+        )
 
     stop_waiter = asyncio.create_task(stop_event.wait(), name="stop_event_wait")
 
@@ -138,12 +143,16 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
                 stop_event.set()
                 await stop_waiter  # ensure the wait task completes
                 break
+            # backfill-only: exit once monitor completes successfully
+            if mode == "backfill-only" and any(t in done for t in tasks if t.get_name() == "monitor"):
+                break
     finally:
         # Signal services to stop gracefully
         await monitor.stop()
-        await strategy.stop()
-        await executor.stop()
-        await reconciler.stop()
+        if mode != "backfill-only":
+            await strategy.stop()
+            await executor.stop()
+            await reconciler.stop()
         await notifier.stop()
 
         for t in tasks:
