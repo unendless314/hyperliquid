@@ -183,6 +183,9 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     validated["max_stale_ms"] = max_stale_ms
     validated["binance_filters"] = binance_filters
 
+    validated["enable_ws_ingest"] = bool(settings.get("enable_ws_ingest", False))
+    validated["hyperliquid_ws_url"] = settings.get("hyperliquid_ws_url", "wss://api.hyperliquid.xyz/ws")
+
     # Fill config_version if missing
     if not validated.get("config_version"):
         validated["config_version"] = time.strftime("%Y%m%d%H%M%S", time.gmtime())

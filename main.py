@@ -27,6 +27,7 @@ from utils.db import init_sqlite
 from utils.validations import SettingsValidationError, validate_settings
 from utils.notifications import Notifier
 from utils.hyperliquid_rest import HyperliquidRestAdapter
+from utils.hyperliquid_ws import HyperliquidWsAdapter
 
 
 def parse_args():
@@ -70,11 +71,19 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
             base_url=settings["hyperliquid_rest_base_url"],
         )
 
+    ws_client = None
+    if settings.get("enable_ws_ingest"):
+        try:
+            ws_client = HyperliquidWsAdapter(wallet=settings["target_wallet"], base_url=settings["hyperliquid_ws_url"])
+        except Exception as exc:
+            print(f"[BOOT][WARN] WS ingest disabled: {exc}")
+            ws_client = None
+
     monitor = Monitor(
         monitor_queue,
         conn,
         settings,
-        ws_client=None,
+        ws_client=ws_client,
         rest_client=rest_client,
         backfill_window=settings["backfill_window"],
         cursor_mode=settings["cursor_mode"],

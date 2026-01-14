@@ -90,5 +90,9 @@
 - `binance_filters`: 依交易對設定 `min_qty`, `step_size`, `min_notional`，下單前本地檢查。
   - 檢查使用的是「預計下單的目標數量」(`order_qty = size_usd / price`)，而非 Hyperliquid 的原始成交數量，避免錯誤拒單。
 
+### 配置補充（WebSocket Ingest）
+- `enable_ws_ingest`: 是否啟用 Hyperliquid WS 監控。
+- `hyperliquid_ws_url`: WS 端點（預設官方）。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

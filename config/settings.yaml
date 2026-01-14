@@ -58,3 +58,7 @@ binance_filters:
     min_qty: 0.001
     step_size: 0.001
     min_notional: 5
+
+# --- WebSocket Ingest ---
+enable_ws_ingest: false
+hyperliquid_ws_url: "wss://api.hyperliquid.xyz/ws"
