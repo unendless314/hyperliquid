@@ -21,3 +21,14 @@ def ensure_no_external_writes(mode: str, ccxt_client: Optional[object]) -> None:
     """
     if mode in {"dry-run", "backfill-only"} and ccxt_client is not None:
         raise SelfCheckError(f"mode={mode} must not receive ccxt_client (would enable external writes)")
+
+
+def ensure_backfill_only_no_executor(mode: str) -> None:
+    if mode == "backfill-only":
+        # guard hook placeholder; main orchestrator already skips starting executor/strategy
+        return
+
+
+def run_startup_checks(mode: str, ccxt_client: Optional[object]) -> None:
+    ensure_no_external_writes(mode, ccxt_client)
+    ensure_backfill_only_no_executor(mode)

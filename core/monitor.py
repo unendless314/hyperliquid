@@ -109,17 +109,21 @@ class Monitor:
                 async for raw in self.ws_client:
                     if self._stopped.is_set():
                         break
-                    backoff = 1.0  # reset after successful receipt
+                    backoff = self.ws_retry_backoff_initial  # reset after successful receipt
                     await self._handle_raw_event(raw)
                 break  # normal exit
             except Exception as exc:  # pragma: no cover - defensive
+                from utils.metrics import metrics
+                metrics.inc("monitor_ws_error")
                 logger.error("monitor_ws_error", exc_info=exc)
                 self._notify(f"[MONITOR][WS][RETRY] {exc}")
                 await self._close_ws()
                 if self.ws_factory:
                     try:
                         self.ws_client = self.ws_factory()
+                        metrics.inc("monitor_ws_recreated")
                     except Exception as create_exc:  # pragma: no cover - defensive
+                        metrics.inc("monitor_ws_recreate_failed")
                         logger.error("monitor_ws_recreate_failed", exc_info=create_exc)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
@@ -172,6 +176,8 @@ class Monitor:
             return
 
         if gap > self.backfill_window:
+            from utils.metrics import metrics
+            metrics.inc("monitor_gap_exceeds_window")
             logger.error(
                 "monitor_gap_exceeds_window",
                 extra={"last_cursor": last_cursor_int, "latest": latest_int, "window": self.backfill_window},
@@ -188,6 +194,8 @@ class Monitor:
         for ev in events:
             await self._handle_raw_event(ev)
 
+        from utils.metrics import metrics
+        metrics.inc("monitor_backfill_fetched", len(events))
         logger.info(
             "monitor_backfill_completed",
             extra={

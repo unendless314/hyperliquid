@@ -30,6 +30,8 @@ from utils.hyperliquid_rest import HyperliquidRestAdapter
 from utils.hyperliquid_ws import HyperliquidWsAdapter
 from utils.rate_limiters import SimpleRateLimiter, CircuitBreaker
 from utils.logger import setup_logger
+from utils.selfcheck import run_startup_checks, SelfCheckError
+from utils.metrics import metrics
 
 
 def parse_args():
@@ -204,6 +206,12 @@ async def async_main():
 
     conn = init_sqlite(args.db)
 
+    try:
+        run_startup_checks(mode, ccxt_client=None)
+    except SelfCheckError as exc:
+        print(f"[BOOT][FAIL] {exc}", file=sys.stderr)
+        sys.exit(1)
+
     print("[BOOT][OK] config_version=", settings["config_version"])
     print("[BOOT][OK] config_hash=", settings["config_hash"])
     print("[BOOT][OK] db_path=", conn.execute("PRAGMA database_list").fetchone()[2])
@@ -213,12 +221,24 @@ async def async_main():
     loop = asyncio.get_running_loop()
     _install_signal_handlers(loop, stop_event, (signal.SIGINT, signal.SIGTERM))
 
+    async def metrics_dump_loop():
+        while not stop_event.is_set():
+            await asyncio.sleep(settings.get("metrics_dump_interval_sec", 60))
+            try:
+                metrics.dump()
+            except Exception:
+                pass
+
     services = asyncio.create_task(_run_services(settings, conn, stop_event))
+    metrics_task = asyncio.create_task(metrics_dump_loop(), name="metrics_dump")
 
     await stop_event.wait()
     print("[SHUTDOWN] signal received, waiting for services to stop...")
     with contextlib.suppress(asyncio.CancelledError):
         await services
+    metrics_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await metrics_task
 
     conn.close()
     print("[SHUTDOWN] clean exit")

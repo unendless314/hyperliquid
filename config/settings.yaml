@@ -43,6 +43,7 @@ telegram_bot_token: ""
 telegram_chat_id: ""
 telegram_base_url: "https://api.telegram.org"
 telegram_dedup_cooldown_sec: 5.0  # seconds between identical alerts when telegram is enabled
+metrics_dump_interval_sec: 60
 
 # --- Monitor / Backfill Settings ---
 # cursor_mode: block -> use block_height as cursor when available; timestamp -> use timestamp_ms

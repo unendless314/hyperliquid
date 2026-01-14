@@ -236,6 +236,8 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     # Mode validation (arg/override will set settings["mode"]; keep fail-fast here too)
     if "mode" in settings:
         _assert_in("mode", settings["mode"], {"live", "dry-run", "backfill-only"})
+    else:
+        settings["mode"] = "live"
 
     # Compute config_hash over canonical content excluding any existing hash
     content_for_hash = dict(validated)
