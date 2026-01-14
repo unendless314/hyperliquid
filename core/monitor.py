@@ -29,6 +29,7 @@ class Monitor:
         db_conn,
         settings: dict,
         ws_client: Optional[Any] = None,
+        ws_factory: Optional[Callable[[], Any]] = None,
         rest_client: Optional[Any] = None,
         backfill_window: int = 200,
         cursor_key: str = "last_processed_cursor",
@@ -36,10 +37,12 @@ class Monitor:
         run_once: bool = False,
         dedup_ttl_seconds: int = DEFAULT_DEDUP_TTL_SECONDS,
         cleanup_interval_seconds: int = 300,
+        notifier: Optional[Any] = None,
     ):
         self.queue = queue
         self.db_conn = db_conn
         self.ws_client = ws_client
+        self.ws_factory = ws_factory
         self.rest_client = rest_client
         self.backfill_window = backfill_window
         self.settings = settings
@@ -50,6 +53,7 @@ class Monitor:
         self.dedup_ttl_seconds = dedup_ttl_seconds
         self.cleanup_interval_seconds = cleanup_interval_seconds
         self._cleanup_task: Optional[asyncio.Task] = None
+        self.notifier = notifier
 
     async def run(self):
         """
@@ -87,10 +91,27 @@ class Monitor:
         Expect ws_client to yield dict events with keys:
           tx_hash, event_index, symbol, block_height, timestamp
         """
-        async for raw in self.ws_client:
-            if self._stopped.is_set():
-                break
-            await self._handle_raw_event(raw)
+        backoff = 1.0
+        max_backoff = 5.0
+        while not self._stopped.is_set():
+            try:
+                async for raw in self.ws_client:
+                    if self._stopped.is_set():
+                        break
+                    backoff = 1.0  # reset after successful receipt
+                    await self._handle_raw_event(raw)
+                break  # normal exit
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("monitor_ws_error", exc_info=exc)
+                self._notify(f"[MONITOR][WS][RETRY] {exc}")
+                await self._close_ws()
+                if self.ws_factory:
+                    try:
+                        self.ws_client = self.ws_factory()
+                    except Exception as create_exc:  # pragma: no cover - defensive
+                        logger.error("monitor_ws_recreate_failed", exc_info=create_exc)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
 
     async def _maybe_gap_and_backfill(self):
         """
@@ -232,6 +253,7 @@ class Monitor:
         self._stopped.set()
         await self._close_ws()
         await self.queue.put({"type": "halt", "reason": reason})
+        self._notify(f"[MONITOR][HALT] reason={reason}")
 
     async def _cleanup_loop(self):
         while not self._stopped.is_set():
@@ -299,3 +321,15 @@ class Monitor:
             if asyncio.iscoroutine(res):
                 with contextlib.suppress(Exception):
                     await res
+
+    def _notify(self, message: str):
+        if not self.notifier:
+            return
+        async def _send():
+            try:
+                await self.notifier.send(message)
+            except Exception:  # pragma: no cover - defensive
+                logger.exception("monitor_notify_failed")
+
+        # fire-and-forget to avoid blocking ingest loop
+        asyncio.create_task(_send())

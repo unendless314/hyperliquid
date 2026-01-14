@@ -64,6 +64,7 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     """
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    notifier = Notifier()
     shared_rate_limiter = SimpleRateLimiter(min_interval_sec=settings.get("rate_limit_min_interval_sec", 0.1))
     shared_circuit_breaker = CircuitBreaker(
         failure_threshold=settings.get("circuit_failure_threshold", 3),
@@ -77,24 +78,29 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
             base_url=settings["hyperliquid_rest_base_url"],
         )
 
+    ws_factory = None
     ws_client = None
     if settings.get("enable_ws_ingest"):
+        ws_factory = lambda: HyperliquidWsAdapter(wallet=settings["target_wallet"], base_url=settings["hyperliquid_ws_url"])
         try:
-            ws_client = HyperliquidWsAdapter(wallet=settings["target_wallet"], base_url=settings["hyperliquid_ws_url"])
+            ws_client = ws_factory()
         except Exception as exc:
             print(f"[BOOT][WARN] WS ingest disabled: {exc}")
             ws_client = None
+            ws_factory = None
 
     monitor = Monitor(
         monitor_queue,
         conn,
         settings,
         ws_client=ws_client,
+        ws_factory=ws_factory,
         rest_client=rest_client,
         backfill_window=settings["backfill_window"],
         cursor_mode=settings["cursor_mode"],
         dedup_ttl_seconds=settings["dedup_ttl_seconds"],
         cleanup_interval_seconds=settings["dedup_cleanup_interval_seconds"],
+        notifier=notifier,
     )
     strategy = Strategy(monitor_queue, exec_queue, settings)
     executor = Executor(
@@ -104,8 +110,7 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         rate_limiter=shared_rate_limiter,
         circuit_breaker=shared_circuit_breaker,
     )
-    reconciler = Reconciler(conn)
-    notifier = Notifier()
+    reconciler = Reconciler(conn, notifier=notifier)
 
     tasks = [
         asyncio.create_task(monitor.run(), name="monitor"),
