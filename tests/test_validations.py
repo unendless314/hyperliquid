@@ -25,6 +25,11 @@ def test_validate_settings_happy_path_adds_version_and_hash():
     assert "config_version" in settings
     assert settings["config_hash"]  # non-empty
     assert settings["config_version"]  # non-empty
+    # defaults for monitor/backfill
+    assert settings["cursor_mode"] == "block"
+    assert settings["backfill_window"] == 200
+    assert settings["dedup_ttl_seconds"] == 86400
+    assert settings["dedup_cleanup_interval_seconds"] == 300
 
 
 @pytest.mark.parametrize("bad_value", ["okex", "kraken"])
@@ -56,5 +61,17 @@ def test_soft_limit_must_be_below_hard():
 def test_rejects_missing_required_field():
     cfg = minimal_settings()
     cfg.pop("target_wallet")
+    with pytest.raises(SettingsValidationError):
+        validate_settings(cfg)
+
+
+def test_invalid_cursor_mode_rejected():
+    cfg = minimal_settings(cursor_mode="HEIGHT")
+    with pytest.raises(SettingsValidationError):
+        validate_settings(cfg)
+
+
+def test_non_int_backfill_window_raises():
+    cfg = minimal_settings(backfill_window="abc")
     with pytest.raises(SettingsValidationError):
         validate_settings(cfg)

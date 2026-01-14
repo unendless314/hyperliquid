@@ -79,5 +79,10 @@
   - `dry-run`: 禁止任何對外寫入，使用虛擬餘額/倉位。
   - `backfill-only`: 僅執行 Gap 回補與 Dedup，不下單，用於冷啟或資料修復。
 
+### 配置補充（Monitor / Backfill）
+- `cursor_mode`: `block` 或 `timestamp`（毫秒）；避免混用單位導致錯誤 Gap 判斷。
+- `backfill_window`: 允許的最大游標差距（超窗則安全停機）。
+- `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）；`dedup_cleanup_interval_seconds`: 清理週期（秒）。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

@@ -62,7 +62,17 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
-    monitor = Monitor(monitor_queue, conn, settings)
+    monitor = Monitor(
+        monitor_queue,
+        conn,
+        settings,
+        ws_client=None,
+        rest_client=None,
+        backfill_window=settings["backfill_window"],
+        cursor_mode=settings["cursor_mode"],
+        dedup_ttl_seconds=settings["dedup_ttl_seconds"],
+        cleanup_interval_seconds=settings["dedup_cleanup_interval_seconds"],
+    )
     strategy = Strategy(monitor_queue, exec_queue, settings)
     executor = Executor(exec_queue, conn, mode=settings.get("mode", "live"))
     reconciler = Reconciler(conn)

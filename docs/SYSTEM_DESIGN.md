@@ -107,5 +107,11 @@
   - `dry-run`: 禁止對外寫入，使用 `MockExchange`，啟動時需驗證「寫路徑全阻斷」。
   - `backfill-only`: 僅做 Gap 回補與 Dedup，同步游標，不觸發下單，適用冷啟/修復。
 
+### 6.1 Monitor / Backfill 配置參數
+- `cursor_mode`: `block` (優先使用區塊高度) 或 `timestamp`（毫秒）；避免混用單位導致誤判 Gap。
+- `backfill_window`: 允許的最大游標差距（超出即安全停機）。
+- `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）。
+- `dedup_cleanup_interval_seconds`: 去重清理排程間隔（秒）。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

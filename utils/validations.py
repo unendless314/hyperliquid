@@ -46,6 +46,13 @@ def _stable_hash(payload: Dict[str, Any]) -> str:
     return sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _coerce_int(name: str, value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise SettingsValidationError(f"{name} must be an integer, got {value!r}")
+
+
 def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate settings dictionary and return an augmented copy with
@@ -124,7 +131,28 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 _assert_between(name, val, low, high)
 
+    # Monitor/backfill config with defaults
+    cursor_mode = settings.get("cursor_mode", "block")
+    if isinstance(cursor_mode, str):
+        cursor_mode = cursor_mode.lower()
+    _assert_in("cursor_mode", cursor_mode, {"block", "timestamp"})
+
+    backfill_window = _coerce_int("backfill_window", settings.get("backfill_window", 200))
+    _assert_positive("backfill_window", backfill_window)
+
+    dedup_ttl_seconds = _coerce_int("dedup_ttl_seconds", settings.get("dedup_ttl_seconds", 24 * 60 * 60))
+    _assert_positive("dedup_ttl_seconds", dedup_ttl_seconds)
+
+    dedup_cleanup_interval_seconds = _coerce_int(
+        "dedup_cleanup_interval_seconds", settings.get("dedup_cleanup_interval_seconds", 300)
+    )
+    _assert_positive("dedup_cleanup_interval_seconds", dedup_cleanup_interval_seconds)
+
     validated = dict(settings)  # shallow copy
+    validated["cursor_mode"] = cursor_mode
+    validated["backfill_window"] = backfill_window
+    validated["dedup_ttl_seconds"] = dedup_ttl_seconds
+    validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
 
     # Fill config_version if missing
     if not validated.get("config_version"):

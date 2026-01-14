@@ -41,3 +41,10 @@ log_level: "INFO"
 telegram_enabled: false
 telegram_bot_token: ""
 telegram_chat_id: ""
+
+# --- Monitor / Backfill Settings ---
+# cursor_mode: block -> use block_height as cursor when available; timestamp -> use timestamp_ms
+cursor_mode: "block"
+backfill_window: 200          # max allowable gap; beyond this triggers halt
+dedup_ttl_seconds: 86400      # dedup cache retention (24h)
+dedup_cleanup_interval_seconds: 300  # how often to clean dedup cache (seconds)
