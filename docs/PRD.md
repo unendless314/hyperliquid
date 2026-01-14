@@ -85,5 +85,10 @@
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）；`dedup_cleanup_interval_seconds`: 清理週期（秒）。
 - `enable_rest_backfill`: 是否啟用 Hyperliquid REST 回補；`hyperliquid_rest_base_url`: 回補 API base URL（預設官方 info 端點）。
 
+### 配置補充（Strategy / Risk）
+- `max_stale_ms`: 事件資料最大片延遲，超過即丟棄。
+- `binance_filters`: 依交易對設定 `min_qty`, `step_size`, `min_notional`，下單前本地檢查。
+  - 檢查使用的是「預計下單的目標數量」(`order_qty = size_usd / price`)，而非 Hyperliquid 的原始成交數量，避免錯誤拒單。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

@@ -115,5 +115,10 @@
 - `enable_rest_backfill`: 是否啟用 REST 回補；啟用時 Monitor 會使用 Hyperliquid REST adapter。
 - `hyperliquid_rest_base_url`: Hyperliquid info API base URL（預設 `https://api.hyperliquid.xyz/info`）。
 
+### 6.2 Strategy / Risk 配置參數
+- `max_stale_ms`: 最大可接受資料延遲（毫秒），超過即丟棄事件。
+- `binance_filters`: 交易對風控設定，包含 `min_qty`, `step_size`, `min_notional`，下單前本地檢查以符合交易所限制。
+  - 檢查對象為「實際下單的目標數量」(`order_qty = size_usd / price`)，避免因 Hyperliquid 原始成交量過小/過大造成誤判。
+
 ---
 *Last Updated: 2026-01-13 (v1.2)*

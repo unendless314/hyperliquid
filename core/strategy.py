@@ -68,7 +68,15 @@ class Strategy:
             logger.warning("strategy_skip_size_missing", extra={"symbol": hl_symbol})
             return None
 
-        if not self._passes_risk(event, size_usd):
+        order_qty = None
+        if price is not None:
+            try:
+                order_qty = float(size_usd) / float(price)
+            except (TypeError, ValueError, ZeroDivisionError):
+                logger.error("strategy_drop_invalid_price_for_qty", extra={"price": price})
+                return None
+
+        if not self._passes_risk(event, size_usd, cex_symbol, size_native, price, order_qty):
             return None
 
         return {
@@ -77,6 +85,7 @@ class Strategy:
             "side": side,
             "size_usd": size_usd,
             "size": size_native,
+            "order_qty": order_qty,
             "price": price,
             "source": "strategy",
             "tx_hash": event.get("tx_hash"),
@@ -107,10 +116,29 @@ class Strategy:
         # Kelly or others not yet implemented
         return 0.0
 
-    def _passes_risk(self, event: dict, size_usd: float) -> bool:
+    def _passes_risk(
+        self, event: dict, size_usd: float, cex_symbol: str, size_native: Any, price: Any, order_qty: Any
+    ) -> bool:
         # Positive size check
         if size_usd <= 0:
             return False
+
+        # Freshness check
+        max_stale_ms = self.settings.get("max_stale_ms")
+        if max_stale_ms is not None:
+            ts = event.get("timestamp")
+            if ts is None:
+                logger.error("strategy_drop_missing_timestamp_for_freshness")
+                return False
+            import time
+
+            now_ms = int(time.time() * 1000)
+            if (now_ms - int(ts)) > int(max_stale_ms):
+                logger.error(
+                    "strategy_drop_stale_event",
+                    extra={"age_ms": now_ms - int(ts), "max_stale_ms": max_stale_ms},
+                )
+                return False
 
         # Capital utilization check
         hard = self.settings.get("capital_utilization_hard_limit")
@@ -170,5 +198,46 @@ class Strategy:
                     },
                 )
                 return False
+
+        # Binance filters (MinQty, StepSize, MinNotional)
+        filters = self.settings.get("binance_filters", {}).get(cex_symbol)
+        if filters:
+            try:
+                min_qty = float(filters.get("min_qty")) if filters.get("min_qty") is not None else None
+                step_size = float(filters.get("step_size")) if filters.get("step_size") is not None else None
+                min_notional = float(filters.get("min_notional")) if filters.get("min_notional") is not None else None
+            except (TypeError, ValueError):
+                logger.error("strategy_filters_invalid", extra={"filters": filters, "symbol": cex_symbol})
+                return False
+
+            # Filters should apply to the size we plan to place, not the source fill size
+            if order_qty is None:
+                logger.error("strategy_drop_missing_price_for_filters", extra={"symbol": cex_symbol})
+                return False
+
+            order_qty_f = float(order_qty)
+            if min_qty is not None and order_qty_f < min_qty:
+                logger.error(
+                    "strategy_drop_min_qty",
+                    extra={"size": order_qty_f, "min_qty": min_qty, "symbol": cex_symbol},
+                )
+                return False
+            if step_size is not None:
+                # accept small floating error
+                steps = order_qty_f / step_size
+                if abs(round(steps) - steps) > 1e-6:
+                    logger.error(
+                        "strategy_drop_step_size",
+                        extra={"size": order_qty_f, "step_size": step_size, "symbol": cex_symbol},
+                    )
+                    return False
+            if min_notional is not None:
+                notional = float(size_usd)
+                if notional < min_notional:
+                    logger.error(
+                        "strategy_drop_min_notional",
+                        extra={"notional": notional, "min_notional": min_notional, "symbol": cex_symbol},
+                    )
+                    return False
 
         return True

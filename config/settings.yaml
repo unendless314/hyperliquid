@@ -50,3 +50,11 @@ dedup_ttl_seconds: 86400      # dedup cache retention (24h)
 dedup_cleanup_interval_seconds: 300  # how often to clean dedup cache (seconds)
 enable_rest_backfill: false
 hyperliquid_rest_base_url: "https://api.hyperliquid.xyz/info"
+
+# --- Strategy / Risk Settings ---
+max_stale_ms: 300000  # drop events older than this (ms); optional
+binance_filters:
+  BTC/USDT:
+    min_qty: 0.001
+    step_size: 0.001
+    min_notional: 5

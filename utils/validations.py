@@ -155,6 +155,24 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     if enable_rest_backfill and cursor_mode != "timestamp":
         raise SettingsValidationError("enable_rest_backfill requires cursor_mode='timestamp' because REST returns timestamps")
 
+    if "max_stale_ms" in settings:
+        max_stale_ms = _coerce_int("max_stale_ms", settings["max_stale_ms"])
+        _assert_positive("max_stale_ms", max_stale_ms)
+    else:
+        max_stale_ms = None
+
+    binance_filters = settings.get("binance_filters", {})
+    if binance_filters is None:
+        binance_filters = {}
+    if not isinstance(binance_filters, dict):
+        raise SettingsValidationError("binance_filters must be a mapping of symbol -> filter dict")
+    for sym, filt in binance_filters.items():
+        if not isinstance(filt, dict):
+            raise SettingsValidationError(f"binance_filters[{sym}] must be a dict")
+        for key in ("min_qty", "step_size", "min_notional"):
+            if key in filt and filt[key] is not None:
+                _assert_positive(f"binance_filters[{sym}].{key}", float(filt[key]))
+
     validated = dict(settings)  # shallow copy
     validated["cursor_mode"] = cursor_mode
     validated["backfill_window"] = backfill_window
@@ -162,6 +180,8 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
     validated["enable_rest_backfill"] = enable_rest_backfill
     validated["hyperliquid_rest_base_url"] = rest_base_url
+    validated["max_stale_ms"] = max_stale_ms
+    validated["binance_filters"] = binance_filters
 
     # Fill config_version if missing
     if not validated.get("config_version"):

@@ -92,3 +92,13 @@ def test_rest_backfill_requires_timestamp_cursor():
     cfg = minimal_settings(enable_rest_backfill=True, cursor_mode="block")
     with pytest.raises(SettingsValidationError):
         validate_settings(cfg)
+
+
+def test_binance_filters_validation():
+    cfg = minimal_settings(binance_filters={"BTC/USDT": {"min_qty": 0.001, "step_size": 0.001, "min_notional": 5}})
+    validated = validate_settings(cfg)
+    assert "binance_filters" in validated
+
+    cfg_bad = minimal_settings(binance_filters={"BTC/USDT": "oops"})
+    with pytest.raises(SettingsValidationError):
+        validate_settings(cfg_bad)
