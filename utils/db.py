@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from typing import Optional
 
 DEFAULT_DB_PATH = "data/hyperliquid.db"
+DEFAULT_DEDUP_TTL_SECONDS = 24 * 60 * 60  # 24h
 
 
 def init_sqlite(db_path: Optional[str] = None) -> sqlite3.Connection:
@@ -28,6 +30,21 @@ def init_sqlite(db_path: Optional[str] = None) -> sqlite3.Connection:
     _apply_pragmas(conn)
     _ensure_schema(conn)
     return conn
+
+
+def cleanup_processed_txs(conn: sqlite3.Connection, ttl_seconds: int = DEFAULT_DEDUP_TTL_SECONDS) -> int:
+    """
+    Delete dedup cache entries older than `ttl_seconds`.
+
+    Returns number of rows removed. Uses SQLite epoch seconds to match created_at default.
+    """
+    cutoff = int(time.time()) - int(ttl_seconds)
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM processed_txs WHERE created_at < ?", (cutoff,))
+        return cur.rowcount
+    finally:
+        cur.close()
 
 
 def set_system_state(conn: sqlite3.Connection, key: str, value: str) -> None:
