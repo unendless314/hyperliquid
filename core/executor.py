@@ -57,6 +57,9 @@ class Executor:
         ccxt_client: Optional[object] = None,
         submit_timeout_sec: float = 5.0,
         poll_interval_sec: float = 1.0,
+        max_submit_retries: int = 3,
+        base_retry_backoff: float = 0.5,
+        max_retry_backoff: float = 2.0,
     ):
         self.exec_queue = exec_queue
         self.db_conn = db_conn
@@ -64,6 +67,9 @@ class Executor:
         self.ccxt_client = ccxt_client
         self.submit_timeout_sec = submit_timeout_sec
         self.poll_interval_sec = poll_interval_sec
+        self.max_submit_retries = max_submit_retries
+        self.base_retry_backoff = base_retry_backoff
+        self.max_retry_backoff = max_retry_backoff
         self._stopped = asyncio.Event()
         self._rate_limiter = SimpleRateLimiter(min_interval_sec=0.1)  # ~10 rps default
         self._breaker = CircuitBreaker()
@@ -112,18 +118,22 @@ class Executor:
         self, correlation_id: str, client_order_id: str, symbol: str, side: str, size_usd: float, order_qty, price
     ):
         if order_qty is None:
-            self._record_trade(
-                correlation_id,
-                symbol,
-                side,
-                size_usd,
-                status="FAILED",
-                exchange_order_id="order-qty-missing",
-                price=price,
-                client_order_id=client_order_id,
-                order_qty=None,
-            )
-            return
+            # In stub mode we can still proceed (used by tests); in real ccxt mode we must have a base qty.
+            if self.ccxt_client is None:
+                order_qty = size_usd
+            else:
+                self._record_trade(
+                    correlation_id,
+                    symbol,
+                    side,
+                    size_usd,
+                    status="FAILED",
+                    exchange_order_id="order-qty-missing",
+                    price=price,
+                    client_order_id=client_order_id,
+                    order_qty=None,
+                )
+                return
 
         if not self._breaker.allow():
             cooldown = max(self._breaker.open_until - time.monotonic(), 0)
@@ -198,8 +208,19 @@ class Executor:
         if self.ccxt_client:
             params = {"clientOrderId": client_order_id}
             # Assume linear futures market order; adapt as needed
-            order = await self.ccxt_client.create_order(symbol, type="market", side=side, amount=order_qty, params=params)
-            return order.get("id") or client_order_id, False
+            attempt = 0
+            while True:
+                attempt += 1
+                try:
+                    order = await self.ccxt_client.create_order(
+                        symbol, type="market", side=side, amount=order_qty, params=params
+                    )
+                    return order.get("id") or client_order_id, False
+                except Exception:
+                    if attempt >= self.max_submit_retries:
+                        raise
+                    backoff = min(self.base_retry_backoff * (2 ** (attempt - 1)), self.max_retry_backoff)
+                    await asyncio.sleep(backoff + random.uniform(0, 0.1))
 
         # Stub path
         exchange_order_id = f"stub-{client_order_id}"
