@@ -148,8 +148,29 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     )
     _assert_positive("dedup_cleanup_interval_seconds", dedup_cleanup_interval_seconds)
 
+    ws_retry_backoff_initial = float(settings.get("ws_retry_backoff_initial", 1.0))
+    ws_retry_backoff_max = float(settings.get("ws_retry_backoff_max", 5.0))
+    _assert_positive("ws_retry_backoff_initial", ws_retry_backoff_initial)
+    _assert_positive("ws_retry_backoff_max", ws_retry_backoff_max)
+    if ws_retry_backoff_max < ws_retry_backoff_initial:
+        raise SettingsValidationError("ws_retry_backoff_max must be >= ws_retry_backoff_initial")
+
     notifier_min_interval_sec = float(settings.get("notifier_min_interval_sec", 0.5))
     _assert_positive("notifier_min_interval_sec", notifier_min_interval_sec, allow_zero=False)
+
+    telegram_enabled = bool(settings.get("telegram_enabled", False))
+    telegram_bot_token = settings.get("telegram_bot_token")
+    telegram_chat_id = settings.get("telegram_chat_id")
+    telegram_base_url = settings.get("telegram_base_url", "https://api.telegram.org")
+    if telegram_enabled:
+        if not telegram_bot_token or not isinstance(telegram_bot_token, str):
+            raise SettingsValidationError("telegram_bot_token is required when telegram_enabled=True")
+        if not telegram_chat_id or not isinstance(telegram_chat_id, str):
+            raise SettingsValidationError("telegram_chat_id is required when telegram_enabled=True")
+        if not isinstance(telegram_base_url, str) or not telegram_base_url.strip():
+            raise SettingsValidationError("telegram_base_url must be a non-empty string")
+    telegram_dedup_cooldown_sec = float(settings.get("telegram_dedup_cooldown_sec", 5.0))
+    _assert_positive("telegram_dedup_cooldown_sec", telegram_dedup_cooldown_sec, allow_zero=False)
 
     rate_limit_min_interval_sec = float(settings.get("rate_limit_min_interval_sec", 0.1))
     _assert_positive("rate_limit_min_interval_sec", rate_limit_min_interval_sec)
@@ -189,7 +210,14 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     validated["backfill_window"] = backfill_window
     validated["dedup_ttl_seconds"] = dedup_ttl_seconds
     validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
+    validated["ws_retry_backoff_initial"] = ws_retry_backoff_initial
+    validated["ws_retry_backoff_max"] = ws_retry_backoff_max
     validated["notifier_min_interval_sec"] = notifier_min_interval_sec
+    validated["telegram_enabled"] = telegram_enabled
+    validated["telegram_bot_token"] = telegram_bot_token
+    validated["telegram_chat_id"] = telegram_chat_id
+    validated["telegram_base_url"] = telegram_base_url
+    validated["telegram_dedup_cooldown_sec"] = telegram_dedup_cooldown_sec
     validated["rate_limit_min_interval_sec"] = rate_limit_min_interval_sec
     validated["circuit_failure_threshold"] = circuit_failure_threshold
     validated["circuit_cooldown_seconds"] = circuit_cooldown_seconds
@@ -204,6 +232,10 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     # Fill config_version if missing
     if not validated.get("config_version"):
         validated["config_version"] = time.strftime("%Y%m%d%H%M%S", time.gmtime())
+
+    # Mode validation (arg/override will set settings["mode"]; keep fail-fast here too)
+    if "mode" in settings:
+        _assert_in("mode", settings["mode"], {"live", "dry-run", "backfill-only"})
 
     # Compute config_hash over canonical content excluding any existing hash
     content_for_hash = dict(validated)

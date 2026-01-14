@@ -45,6 +45,8 @@ class Monitor:
         dedup_ttl_seconds: int = DEFAULT_DEDUP_TTL_SECONDS,
         cleanup_interval_seconds: int = 300,
         notifier: Optional[Any] = None,
+        ws_retry_backoff_initial: float = 1.0,
+        ws_retry_backoff_max: float = 5.0,
     ):
         self.queue = queue
         self.db_conn = db_conn
@@ -61,6 +63,8 @@ class Monitor:
         self.cleanup_interval_seconds = cleanup_interval_seconds
         self._cleanup_task: Optional[asyncio.Task] = None
         self.notifier = notifier
+        self.ws_retry_backoff_initial = ws_retry_backoff_initial
+        self.ws_retry_backoff_max = ws_retry_backoff_max
 
     async def run(self):
         """
@@ -98,8 +102,8 @@ class Monitor:
         Expect ws_client to yield dict events with keys:
           tx_hash, event_index, symbol, block_height, timestamp
         """
-        backoff = 1.0
-        max_backoff = 5.0
+        backoff = self.ws_retry_backoff_initial
+        max_backoff = self.ws_retry_backoff_max
         while not self._stopped.is_set():
             try:
                 async for raw in self.ws_client:
@@ -184,6 +188,15 @@ class Monitor:
         for ev in events:
             await self._handle_raw_event(ev)
 
+        logger.info(
+            "monitor_backfill_completed",
+            extra={
+                "from_cursor": last_cursor_int + 1,
+                "to_cursor": latest_int,
+                "gap": gap,
+                "fetched": len(events),
+            },
+        )
         # Advance cursor even if no new events (already deduped) to avoid repeating the same backfill window
         self._set_cursor(latest_int)
 

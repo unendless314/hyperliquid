@@ -65,7 +65,15 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     """
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-    notifier = Notifier(mode=settings.get("mode", "live"), rate_limiter=SimpleRateLimiter(settings.get("notifier_min_interval_sec", 0.5)))
+    notifier = Notifier(
+        mode=settings.get("mode", "live"),
+        rate_limiter=SimpleRateLimiter(settings.get("notifier_min_interval_sec", 0.5)),
+        telegram_enabled=settings.get("telegram_enabled", False),
+        telegram_bot_token=settings.get("telegram_bot_token"),
+        telegram_chat_id=settings.get("telegram_chat_id"),
+        telegram_base_url=settings.get("telegram_base_url", "https://api.telegram.org"),
+        dedup_cooldown_sec=settings.get("telegram_dedup_cooldown_sec", 5.0),
+    )
     shared_rate_limiter = SimpleRateLimiter(min_interval_sec=settings.get("rate_limit_min_interval_sec", 0.1))
     shared_circuit_breaker = CircuitBreaker(
         failure_threshold=settings.get("circuit_failure_threshold", 3),
@@ -103,6 +111,8 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
         cleanup_interval_seconds=settings["dedup_cleanup_interval_seconds"],
         notifier=notifier,
         run_once=settings.get("mode") == "backfill-only",
+        ws_retry_backoff_initial=settings.get("ws_retry_backoff_initial", 1.0),
+        ws_retry_backoff_max=settings.get("ws_retry_backoff_max", 5.0),
     )
     strategy = Strategy(monitor_queue, exec_queue, settings)
     executor = Executor(
@@ -184,7 +194,11 @@ async def async_main():
         print(f"[BOOT][FAIL] {exc}", file=sys.stderr)
         sys.exit(1)
 
+    allowed_modes = {"live", "dry-run", "backfill-only"}
     mode = args.mode or "live"
+    if mode not in allowed_modes:
+        print(f"[BOOT][FAIL] invalid mode={mode}, must be one of {allowed_modes}", file=sys.stderr)
+        sys.exit(1)
     settings["mode"] = mode
     setup_logger(level=settings.get("log_level", "INFO"), mode=settings["mode"])
 

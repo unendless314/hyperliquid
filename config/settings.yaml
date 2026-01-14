@@ -41,6 +41,8 @@ log_level: "INFO"
 telegram_enabled: false
 telegram_bot_token: ""
 telegram_chat_id: ""
+telegram_base_url: "https://api.telegram.org"
+telegram_dedup_cooldown_sec: 5.0  # seconds between identical alerts when telegram is enabled
 
 # --- Monitor / Backfill Settings ---
 # cursor_mode: block -> use block_height as cursor when available; timestamp -> use timestamp_ms
@@ -66,3 +68,5 @@ binance_filters:
 # --- WebSocket Ingest ---
 enable_ws_ingest: false
 hyperliquid_ws_url: "wss://api.hyperliquid.xyz/ws"
+ws_retry_backoff_initial: 1.0
+ws_retry_backoff_max: 5.0

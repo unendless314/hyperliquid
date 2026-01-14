@@ -109,3 +109,20 @@ def test_reconciler_defaults_present():
     validated = validate_settings(cfg)
     assert validated["enable_ws_ingest"] is False
     assert validated["hyperliquid_ws_url"]
+
+
+def test_telegram_validation():
+    base = minimal_settings()
+    with pytest.raises(SettingsValidationError):
+        validate_settings({**base, "telegram_enabled": True})
+
+    validated = validate_settings(
+        {
+            **base,
+            "telegram_enabled": True,
+            "telegram_bot_token": "t",
+            "telegram_chat_id": "c",
+        }
+    )
+    assert validated["telegram_enabled"] is True
+    assert validated["telegram_bot_token"] == "t"
