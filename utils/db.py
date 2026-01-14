@@ -104,12 +104,14 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             correlation_id TEXT,
             symbol TEXT,
             side TEXT,
-            size REAL,
+            size REAL,               -- USD notional (per current pipeline)
+            order_qty REAL,          -- base quantity we attempted to place
             price REAL,
             pnl REAL,
             status TEXT,
             exchange_order_id TEXT,
             tx_hash TEXT,
+            client_order_id TEXT,
             created_at INTEGER DEFAULT (strftime('%s','now'))
         );
         CREATE INDEX IF NOT EXISTS idx_trade_corr ON trade_history(correlation_id);
@@ -121,4 +123,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    # Backward-compat: add client_order_id if missing
+    cur.execute("PRAGMA table_info(trade_history)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "client_order_id" not in cols:
+        cur.execute("ALTER TABLE trade_history ADD COLUMN client_order_id TEXT")
+        cols.add("client_order_id")
+    if "order_qty" not in cols:
+        cur.execute("ALTER TABLE trade_history ADD COLUMN order_qty REAL")
     cur.close()
