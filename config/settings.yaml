@@ -50,6 +50,7 @@ dedup_ttl_seconds: 86400      # dedup cache retention (24h)
 dedup_cleanup_interval_seconds: 300  # how often to clean dedup cache (seconds)
 enable_rest_backfill: false
 hyperliquid_rest_base_url: "https://api.hyperliquid.xyz/info"
+notifier_min_interval_sec: 0.5      # rate limit for alerts (seconds)
 rate_limit_min_interval_sec: 0.1     # shared limiter min interval (s) for submit/poll/notify
 circuit_failure_threshold: 3         # consecutive failures before opening circuit
 circuit_cooldown_seconds: 5.0        # cooldown duration when circuit opens

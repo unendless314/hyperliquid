@@ -148,6 +148,9 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     )
     _assert_positive("dedup_cleanup_interval_seconds", dedup_cleanup_interval_seconds)
 
+    notifier_min_interval_sec = float(settings.get("notifier_min_interval_sec", 0.5))
+    _assert_positive("notifier_min_interval_sec", notifier_min_interval_sec, allow_zero=False)
+
     rate_limit_min_interval_sec = float(settings.get("rate_limit_min_interval_sec", 0.1))
     _assert_positive("rate_limit_min_interval_sec", rate_limit_min_interval_sec)
 
@@ -186,6 +189,7 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     validated["backfill_window"] = backfill_window
     validated["dedup_ttl_seconds"] = dedup_ttl_seconds
     validated["dedup_cleanup_interval_seconds"] = dedup_cleanup_interval_seconds
+    validated["notifier_min_interval_sec"] = notifier_min_interval_sec
     validated["rate_limit_min_interval_sec"] = rate_limit_min_interval_sec
     validated["circuit_failure_threshold"] = circuit_failure_threshold
     validated["circuit_cooldown_seconds"] = circuit_cooldown_seconds

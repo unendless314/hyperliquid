@@ -29,6 +29,7 @@ from utils.notifications import Notifier
 from utils.hyperliquid_rest import HyperliquidRestAdapter
 from utils.hyperliquid_ws import HyperliquidWsAdapter
 from utils.rate_limiters import SimpleRateLimiter, CircuitBreaker
+from utils.logger import setup_logger
 
 
 def parse_args():
@@ -64,7 +65,7 @@ async def _run_services(settings, conn, stop_event: asyncio.Event):
     """
     monitor_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
     exec_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-    notifier = Notifier()
+    notifier = Notifier(mode=settings.get("mode", "live"), rate_limiter=SimpleRateLimiter(settings.get("notifier_min_interval_sec", 0.5)))
     shared_rate_limiter = SimpleRateLimiter(min_interval_sec=settings.get("rate_limit_min_interval_sec", 0.1))
     shared_circuit_breaker = CircuitBreaker(
         failure_threshold=settings.get("circuit_failure_threshold", 3),
@@ -175,6 +176,7 @@ async def async_main():
         sys.exit(1)
 
     settings["mode"] = args.mode
+    setup_logger(level=settings.get("log_level", "INFO"), mode=settings["mode"])
 
     conn = init_sqlite(args.db)
 
