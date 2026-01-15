@@ -22,16 +22,23 @@
     *   執行 Symbol Mapping (Hyperliquid -> Binance)。
     *   執行 Risk Checks (Price Deviation：百分比+USD 絕對值、Blacklist、Binance Filters)。
     *   計算 Position Size。
+    *   限價單定價：基準價使用 Binance Mark Price 或最佳買賣中點（預設 Mark Price）；多單掛 `基準價 * (1 + price_offset_pct)`、空單掛 `基準價 * (1 - price_offset_pct)`，`price_offset_pct` 預設 0%~0.05%；下單前以基準價檢查滑點上限，超標即拒單。
 
 *   **Executor (Action Layer)**:
-    *   **Order FSM**: 管理訂單狀態 (Submit -> Monitor -> Finalize)，包含 `UNKNOWN`/`STUCK` 狀態供 Reconciler 後續處理。
+    *   **Order FSM**: 管理訂單狀態 (Submit -> Monitor -> Finalize)，完整狀態集合：`PENDING` → `SUBMITTED` → `PARTIALLY_FILLED` → `FILLED` / `CANCELED` / `EXPIRED` / `REJECTED` / `UNKNOWN`（網路中斷或回報缺失）；`STUCK` 可作內部診斷用。
     *   **Smart Retry**: 實作帶有 Jitter 的指數退避 (Exponential Backoff)，與 Status Poller/Query 共用同一組 Rate Limiter/Backoff。
     *   **Idempotency Key**: `clientOrderId = hl-{tx_hash}-{nonce}`（nonce 可為本地單調遞增或隨機），確保重試或斷線重送不會重複開倉。
 
 *   **Reconciler (Safety Layer)**:
-    *   **非同步迴圈**: 每 X 秒執行一次。
+    *   **啟動對帳**：服務啟動後先執行一次對帳；若漂移達 critical，進入安全模式（停開新倉），待人工確認或明確修復指令後再放行。
+    *   **非同步迴圈**: 每 X 秒執行一次（常態對帳）。
     *   **Drift Check**: `abs(Binance_Position - DB_Position) > Threshold`?
-    *   分級動作：< `warn_threshold` 記錄+通知；≥ `critical_threshold` 觸發 Critical Alert，並可選擇 `Force Sync` (多退少補/平倉)。
+    *   分級動作：< `warn_threshold` 記錄+通知；≥ `critical_threshold` 觸發 Critical Alert，可依設定選擇 `Force Sync` (多退少補/平倉) 或進安全模式。
+*   **冷啟缺口處理 / 基線策略**：若啟動時游標缺口超窗或初始對帳達 critical，保持安全模式；需決定是否 `trust_local`：\
+    - `trust_local=false`（預設）：啟動快照本地/遠端持倉，任一非零則維持安全模式，不處理後續訊號。\
+    - `trust_local=true`：接受本地現有倉位為基線繼續跟單，即使遠端有歷史持倉，後續平倉/加倉訊號照常執行，漂移交由 Reconciler 監測。\
+    基線未決前不處理後續平倉訊號，避免反向開倉。
+*   **目標錢包持倉快照**：啟動時呼叫 Hyperliquid info API（如 `clearinghouseState`）取得目標錢包即時持倉；若快照失敗/過期，或在 `trust_local=false` 下遠端持倉非零，保持安全模式並提示人工決策。
 
 ### 1.2 資料儲存 (Data Persistence - SQLite)
 
@@ -48,7 +55,7 @@
     *   用於報表與歷史回測。
 3.  `system_state`:
     *   `key` (PK), `value`。
-    *   用於儲存 `last_processed_block`, `config_hash`, `config_version` 等游標/審計數據。
+    *   用於儲存 `last_processed_timestamp`（預設游標）、`config_hash`, `config_version` 等游標/審計數據；`last_processed_block` 僅作未來若有區塊高度訊號時的可選項。
 
 **SQLite 操作守則**
 - 啟用 WAL、設定 `busy_timeout`，單執行緒單連線；避免跨執行緒共享連線。
@@ -63,7 +70,13 @@
     *   檢查 `CircuitBreaker` (是否觸發熔斷)；`CircuitBreaker` 與 Rate Limiter 共用冷卻計數。
     *   呼叫 CCXT `create_order` (帶 `clientOrderId`)。
     *   收到 `order_id` -> 更新 SQLite 狀態為 `SUBMITTED`。
-    *   啟動 `OrderMonitor` 輪詢成交狀態 (受同一 Rate Limiter 管控) -> 更新 SQLite 為 `FILLED` / `PARTIALLY_FILLED` / `EXPIRED`；若無回報超時，標記 `UNKNOWN`。
+    *   啟動 `OrderMonitor` 輪詢成交狀態 (受同一 Rate Limiter 管控)：
+        * 取得部分成交 -> 更新為 `PARTIALLY_FILLED`，累計已成交量；在 TIF 內持續輪詢，超時則自動撤未成交部分。
+        * TIF 尾段可配置「先撤單、後兜底」策略：先發撤單並確認撤單完成，依剩餘量改市價/IOC 補單；兜底前需通過滑點/殘量門檻，兜底後若仍未全成則落終態並告警。
+        * 全數成交 -> `FILLED`。
+        * 交易所回報撤單 / 主動撤單 / IOC 剩餘未成交 -> `CANCELED` 或 `EXPIRED`（依交易所語意，預設 IOC/FOK 逾時記為 EXPIRED）。
+        * 交易所拒單（風控、餘額、步進不符等）-> `REJECTED`。
+        * 輪詢超時或無回報 -> `UNKNOWN`，交由 Reconciler 後續處理。
 4.  **Notifier**: 根據狀態變更發送 Telegram (需經過 Rate Limiter)。
 
 ### 2.2 錯誤處理流程
@@ -75,19 +88,19 @@
 
 *   **密鑰管理**:
     *   支援從環境變數 (`OS Env`) 或加密的 `.env` 檔案讀取。
-    *   程式碼中僅保存 `API_KEY` 的 Masked Version (e.g., `***abcd`) 用於日誌。
+    *   日誌中不得輸出任何 API Key（即使遮罩也不輸出）；設定物件/錯誤訊息須過濾敏感欄位。
 *   **Dry-Run Mode**:
     *   啟用時，Executor 攔截所有 `write` 操作並在啟動自檢時驗證「寫路徑全被阻擋」；否則拒絕啟動。
     *   `MockExchange` 類別模擬掛單與成交回報，更新虛擬餘額。
 *   **Health Checks**:
-    *   提供 `/health` 端點 (若有 Web Server) 或本地 `heartbeat` 文件，供外部監控工具 (如 K8s probe) 檢測。
+    *   本系統統一採用本地 `heartbeat` 檔案：服務每隔 N 秒更新 `data/heartbeat`（timestamp），外部腳本或監控檢查檔案的更新時間是否在允許範圍內，超時即告警/重啟。若未來增加 Web 服務，可另行擴充 `/health` 端點，但現階段規格以 heartbeat 為準。
 
 ## 4. 測試策略 (Testing Strategy)
 *   **Unit Tests**: Config Validation, Kelly Calculation, Deduplication Logic.
 *   **Integration Tests (Binance Testnet)**:
     *   Happy Path: 完整下單成交流程。
     *   Chaos: 模擬網路斷線、模擬 429、模擬部分成交。
-    *   Reconciliation: 手動在交易所平倉，驗證系統是否能偵測並報警。
+    *   Reconciliation: 手動在交易所平倉或開倉（與系統記錄方向/數量不符），驗證系統是否能偵測漂移並告警/觸發臨界動作。
 
 ## 5. 配置與版本治理 (Config & Versioning)
 - `settings.yaml` 必須包含 `config_version` 與 `config_hash`；對未知欄位 fail-fast。
@@ -108,7 +121,7 @@
   - `backfill-only`: 僅做 Gap 回補與 Dedup，同步游標，不觸發下單，適用冷啟/修復。
 
 ### 6.1 Monitor / Backfill 配置參數
-- `cursor_mode`: **預設 `timestamp`（毫秒）**；REST userFills 以時間戳為主，建議以 timestamp 為主游標，`block` 僅作輔助，避免混用單位。
+- `cursor_mode`: **預設且建議使用 `timestamp`（毫秒）**；Hyperliquid userFills 僅提供時間戳，`block` 模式暫不支援現行資料源，僅作未來若有區塊高度訊號時的可選項。
 - `backfill_window`: **預設 900_000 ms（15 分鐘）**；超出即 halt + alert。
 - `dedup_ttl_seconds`: 去重快取保留時間（預設 24h）。
 - `dedup_cleanup_interval_seconds`: 去重清理排程間隔（秒）。
@@ -135,5 +148,12 @@
 - `telegram_enabled`, `telegram_bot_token`, `telegram_chat_id`, `telegram_base_url`, `telegram_dedup_cooldown_sec`: Telegram 告警設定與去重冷卻；未啟用時使用 stdout fallback。
 - `metrics_dump_interval_sec`: 週期性將累積 metrics 以 stdout `[METRICS] {...}` 形式輸出，並同步 append 至 `logs/metrics.log`（滾動）；預設 60 秒。當前 metrics 包含 gap 超窗次數、backfill fetched 數量、WS error/recreate 次數，可後續接 Prometheus/OTLP。
 
+### 6.6 Executor / TIF / 兜底配置參數
+- `tif_seconds`: 限價單等待時間（預設 5–10 秒，可依市場/頻率調整）。
+- `order_poll_interval_sec`: 輪詢成交狀態的間隔（預設 2–3 秒，與共享 Rate Limiter 協同）。
+- `market_fallback_enabled`: 是否在 TIF 尾段改市價/IOC 兜底（預設開啟）。
+- `market_fallback_threshold_pct`: 兜底觸發門檻，剩餘量低於原單多少百分比才改市價（例：10%）。
+- `market_slippage_cap_pct`: 兜底前允許的最大滑點百分比（例：0.5%）；超過則不兜底，轉終態並告警。
+
 ---
-*Last Updated: 2026-01-14 (v1.2.1 — 文檔已定版，程式稍後對齊)*
+*Last Updated: 2026-01-14 (v1.2.17 — trust_local 旗標預設 false；本地/遠端快照非零留安全模式；連續性模式交由 Reconciler 監測漂移)* 

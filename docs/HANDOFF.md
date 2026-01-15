@@ -74,3 +74,14 @@
 - 游標/回補可視化儀表（local dashboard）。
 - run_id 寫入 system_state 以利審計/追蹤。
 - Auto-close/修復動作的審計日誌與冷卻策略細化。
+
+## 9. 文檔重大更新與暫停開發提示（2026-01-15）
+- 規格更新：PRD/SYSTEM_DESIGN 已升級至 v1.2.17，核心變更：
+  - 啟動基線只靠 `trust_local` 旗標（預設 false）。啟動會同時快照本地/CEX 持倉與 Hyperliquid 目標錢包持倉；任一非零且未設 `trust_local=true` 時，保持安全模式，不啟動跟單。
+  - 移除自動 mirror 遠端倉位；`trust_local=true` 表示接受本地現有倉位為基線，漂移交由 Reconciler 監測。
+  - 限價單定價：以 Binance Mark Price（或 Mid）為基準，加/減 `price_offset_pct`（預設 0~0.05%）；下單前必須做滑點檢查。
+  - TIF 尾段兜底：先撤限價、確認撤單後，再依剩餘量市價/IOC 補單，受滑點與殘量門檻限制。
+  - 部分成交與平倉防護：平倉量 clamp、缺失開倉/漏單時的平倉訊號需跳過，避免反向開倉。
+  - 安全性：禁止日誌輸出 API Key（即便遮罩），強制 heartbeat 檔案存活探測，metrics dump 仍為 stdout+logs。
+- 現有程式與新文檔有顯著差距（啟動流程、安全模式/快照、限價定價、兜底策略、trust_local 旗標等）。建議暫停新增功能與實盤操作，先依新規格整理重構計畫，再開發。
+- 若需繼續開發，請先：對照新文檔列出差異 -> 訂定重構順序 -> 更新測試與 smoke -> 再放行。
