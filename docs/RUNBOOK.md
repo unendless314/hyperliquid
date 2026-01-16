@@ -3,18 +3,18 @@
 ## Startup
 
 Prerequisites:
-- settings.yaml validated
+- config/settings.yaml validated
 - config_hash computed and recorded
 - API keys available for selected environment
 - Time sync offset computed
 
 Steps:
 1. Validate config:
-   - python tools/validate_config.py --config settings.yaml --schema config/schema.json
+   - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
 2. Compute config_hash:
-   - python tools/hash_config.py --config settings.yaml
-3. Start service (environment is selected by settings.yaml):
-   - python main.py --mode live --config settings.yaml
+   - python tools/hash_config.py --config config/settings.yaml
+3. Start service (environment is selected by config/settings.yaml):
+   - python src/hyperliquid/main.py --mode live --config config/settings.yaml
 
 Verification:
 - sqlite3 <db_path> "select key, value from system_state where key like 'safety_%';"
@@ -60,9 +60,9 @@ Checklist:
 ### Backups
 - Daily SQLite backup
 - Backup path uses db_path from settings.yaml
+- Suggested filename pattern: backup-YYYYMMDD-HHMM.db
 - Verify restore by reading system_state
 
 ### Schema Updates
 - Apply migration scripts manually during MVP
 - Verify schema version and system_state
-

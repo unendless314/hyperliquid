@@ -6,8 +6,8 @@
 - Production
 
 ## Configuration
-- settings.yaml is required at startup and validated with schema rules.
-- config_hash is computed from the full settings.yaml content.
+- config/settings.yaml is required at startup and validated with schema rules.
+- config_hash is computed from the full config/settings.yaml content.
 - config_hash and config_version are persisted in system_state on startup.
 
 ### Expected Commands (MVP)
@@ -15,10 +15,10 @@ These commands define the expected operator workflow. If a script does not exist
 must be implemented before release.
 
 - Validate config:
-  - python tools/validate_config.py --config settings.yaml --schema config/schema.json
+  - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
 
-- Compute config_hash (SHA-256 of settings.yaml UTF-8 bytes):
-  - python tools/hash_config.py --config settings.yaml
+- Compute config_hash (SHA-256 of config/settings.yaml UTF-8 bytes):
+  - python tools/hash_config.py --config config/settings.yaml
 
 ## Build
 - Python runtime with pinned dependency versions.
@@ -30,9 +30,9 @@ must be implemented before release.
 - pip install -r requirements.txt
 
 ## Run Commands
-- Live: python main.py --mode live --config settings.yaml
-- Dry-run: python main.py --mode dry-run --config settings.yaml
-- Backfill-only: python main.py --mode backfill-only --config settings.yaml
+- Live: python src/hyperliquid/main.py --mode live --config config/settings.yaml
+- Dry-run: python src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
+- Backfill-only: python src/hyperliquid/main.py --mode backfill-only --config config/settings.yaml
 
 ## Verify (Post-Deploy)
 - Confirm safety mode and reason code in system_state.
@@ -48,17 +48,17 @@ must be implemented before release.
 - Inspect metrics/logs (from settings.yaml keys):
   - metrics_log_path
   - app_log_path
+  - tail -n 50 <app_log_path>
 
 ## Rollback
 - Stop process
-- Restore previous settings.yaml
+- Restore previous config/settings.yaml
 - Restart with previous config_hash
 - Verify system_state reflects the restored config_hash
 
 ## Release Checklist
-- settings.yaml schema validated
+- config/settings.yaml schema validated
 - config_hash recorded
 - API keys loaded for selected environment
 - time sync offset computed
 - startup reconciliation completed
-

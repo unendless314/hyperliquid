@@ -19,7 +19,7 @@ Checks (copy/paste):
 - tail -n 50 <metrics_log_path> | grep "dedup_drop_count"
 
 Notes:
-- <db_path> and <metrics_log_path> come from settings.yaml.
+- <db_path> and <metrics_log_path> come from config/settings.yaml.
 
 Expected:
 - Cursor advances only after persistence.
@@ -39,7 +39,7 @@ Checks (copy/paste):
 - sqlite3 <db_path> "select correlation_id, count(*) from order_intents group by correlation_id having count(*) > 1;"
 
 Notes:
-- <db_path> comes from settings.yaml.
+- <db_path> comes from config/settings.yaml.
 
 Expected:
 - No duplicated order_intents.
@@ -59,7 +59,7 @@ Checks (copy/paste):
 - tail -n 50 <metrics_log_path> | grep "order_success_rate"
 
 Notes:
-- <db_path> and <metrics_log_path> come from settings.yaml.
+- <db_path> and <metrics_log_path> come from config/settings.yaml.
 
 Expected:
 - Position updates match filled_qty.
@@ -82,11 +82,11 @@ Expected:
 ## Environment Prerequisites (MVP)
 - Binance testnet API key and secret
 - Hyperliquid target wallet address
-- settings.yaml configured for testnet
+- config/settings.yaml configured for testnet
 - sqlite3 installed locally
 
 ## Suggested Commands (MVP)
-- Live (testnet): python main.py --mode live --config settings.yaml
-- Dry-run: python main.py --mode dry-run --config settings.yaml
-- Backfill-only: python main.py --mode backfill-only --config settings.yaml
+- Live (testnet): python src/hyperliquid/main.py --mode live --config config/settings.yaml
+- Dry-run: python src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
+- Backfill-only: python src/hyperliquid/main.py --mode backfill-only --config config/settings.yaml
 
