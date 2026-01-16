@@ -2,15 +2,63 @@
 
 ## Environments
 - Local
-- Staging
+- Staging (optional)
 - Production
 
 ## Configuration
-- settings.yaml validation
-- config_hash tracking
+- settings.yaml is required at startup and validated with schema rules.
+- config_hash is computed from the full settings.yaml content.
+- config_hash and config_version are persisted in system_state on startup.
 
-## Release Steps
-- Build
-- Deploy
-- Verify
+### Expected Commands (MVP)
+These commands define the expected operator workflow. If a script does not exist yet, it
+must be implemented before release.
+
+- Validate config:
+  - python tools/validate_config.py --config settings.yaml --schema config/schema.json
+
+- Compute config_hash (SHA-256 of settings.yaml UTF-8 bytes):
+  - python tools/hash_config.py --config settings.yaml
+
+## Build
+- Python runtime with pinned dependency versions.
+- Use a virtual environment for isolation.
+
+### Expected Commands (MVP)
+- python -m venv .venv
+- . .venv/bin/activate
+- pip install -r requirements.txt
+
+## Run Commands
+- Live: python main.py --mode live --config settings.yaml
+- Dry-run: python main.py --mode dry-run --config settings.yaml
+- Backfill-only: python main.py --mode backfill-only --config settings.yaml
+
+## Verify (Post-Deploy)
+- Confirm safety mode and reason code in system_state.
+- Confirm cursor and event ingestion advancing.
+- Confirm reconciliation loop running and drift within thresholds.
+
+### Expected Checks (MVP)
+- Inspect SQLite system_state (db_path from settings.yaml):
+  - sqlite3 <db_path> "select key, value from system_state where key like 'safety_%';"
+  - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
+  - Note: these queries are read-only.
+
+- Inspect metrics/logs (from settings.yaml keys):
+  - metrics_log_path
+  - app_log_path
+
+## Rollback
+- Stop process
+- Restore previous settings.yaml
+- Restart with previous config_hash
+- Verify system_state reflects the restored config_hash
+
+## Release Checklist
+- settings.yaml schema validated
+- config_hash recorded
+- API keys loaded for selected environment
+- time sync offset computed
+- startup reconciliation completed
 

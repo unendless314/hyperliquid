@@ -58,9 +58,37 @@ Safety/Reconciliation runs alongside Execution to guard drift and unsafe conditi
 ## Startup State Machine
 BOOTSTRAP -> SNAPSHOT_CHECK -> RECONCILE_ON_START -> BACKFILL_CATCHUP -> ARMED_SAFE | ARMED_LIVE | HALT
 
+State meanings:
 - ARMED_SAFE: no exposure increase; allow reduce-only as configured
 - ARMED_LIVE: normal operation
 - HALT: hard stop, manual intervention required
+
+### Transition Rules (MVP)
+- BOOTSTRAP -> SNAPSHOT_CHECK
+  - Trigger: config validated, DB initialized
+
+- SNAPSHOT_CHECK -> RECONCILE_ON_START
+  - Trigger: local/exchange/target snapshots collected
+  - Fail: snapshot error or stale data -> ARMED_SAFE (reason code)
+  - Hard Fail: snapshot unavailable or inconsistent -> HALT
+
+- RECONCILE_ON_START -> BACKFILL_CATCHUP
+  - Trigger: initial reconciliation completed
+  - Fail: critical drift -> ARMED_SAFE (reason code)
+  - Hard Fail: drift exceeds critical_threshold and cannot be reduced safely -> HALT
+
+- BACKFILL_CATCHUP -> ARMED_LIVE
+  - Trigger: backfill completed without gap violation
+  - Guard: startup_policy allows live (e.g., continuity or explicit manual promotion)
+  - Else: ARMED_SAFE
+
+- ARMED_SAFE -> ARMED_LIVE
+  - Trigger: manual promotion or explicit operator action
+  - Guard: no active critical drift, no gap violation, snapshots valid
+
+- Any state -> HALT
+  - Trigger: gap exceeds backfill_window, invalid position mode, or unrecoverable errors
+  - Examples: DB corruption, config_hash mismatch, persistent storage unavailable
 
 ## Failure Domains
 - Data integrity: gaps, duplicate events, cursor errors

@@ -4,17 +4,17 @@
 Standardized input produced by Ingest and consumed by Decision.
 
 Required fields:
-- symbol
-- timestamp_ms
-- tx_hash
-- event_index
-- is_replay
-- prev_target_net_position
-- next_target_net_position
-- delta_target_net_position
-- action_type: INCREASE | DECREASE | FLIP
-- open_component (for FLIP)
-- close_component (for FLIP)
+- symbol: TEXT (e.g., BTCUSDT)
+- timestamp_ms: INTEGER (UTC epoch milliseconds)
+- tx_hash: TEXT
+- event_index: INTEGER
+- is_replay: INTEGER (0 or 1)
+- prev_target_net_position: REAL (base asset qty, one-way)
+- next_target_net_position: REAL (base asset qty, one-way)
+- delta_target_net_position: REAL (next - prev)
+- action_type: TEXT enum {INCREASE, DECREASE, FLIP}
+- open_component: REAL (base asset qty; required only for FLIP; nullable otherwise)
+- close_component: REAL (base asset qty; required only for FLIP; nullable otherwise)
 
 Rules:
 - action_type is derived from prev/next net position
@@ -26,37 +26,44 @@ Rules:
 Produced by Decision and consumed by Execution.
 
 Required fields:
-- correlation_id
-- symbol
-- side
-- order_type: LIMIT | MARKET
-- qty
-- price (optional for MARKET)
-- reduce_only
-- time_in_force
-- is_replay
-- risk_notes (optional)
+- correlation_id: TEXT (unique, stable per PositionDeltaEvent)
+- symbol: TEXT
+- side: TEXT enum {BUY, SELL}
+- order_type: TEXT enum {LIMIT, MARKET}
+- qty: REAL (base asset quantity; must be > 0)
+- price: REAL (required for LIMIT; nullable for MARKET)
+- reduce_only: INTEGER (0 or 1)
+- time_in_force: TEXT (e.g., GTC, IOC)
+- is_replay: INTEGER (0 or 1)
+- risk_notes: TEXT (optional)
 
 Rules:
 - reduce_only must be true for DECREASE and close_component
 - correlation_id must map back to PositionDeltaEvent
+- If order_type is MARKET, price may be null
 
 ## OrderResult
 Produced by Execution and persisted by Storage.
 
 Required fields:
-- correlation_id
-- exchange_order_id
-- status: PENDING | SUBMITTED | PARTIALLY_FILLED | FILLED | CANCELED | EXPIRED | REJECTED | UNKNOWN
-- filled_qty
-- avg_price
-- error_code (optional)
-- error_message (optional)
+- correlation_id: TEXT
+- exchange_order_id: TEXT (nullable if order was rejected before submission)
+- status: TEXT enum {PENDING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, REJECTED, UNKNOWN}
+- filled_qty: REAL (base asset quantity)
+- avg_price: REAL (quote per base; nullable)
+- error_code: TEXT (nullable)
+- error_message: TEXT (nullable)
 
 Rules:
 - PARTIALLY_FILLED is a normal state; it must not by itself trigger a safety downgrade.
 - Safety mode changes are driven by reconciliation drift or hard risk failures.
 - Replay policy applies only to backfilled events (PositionDeltaEvent.is_replay).
+
+## Correlation ID
+- Format: hl-{tx_hash}-{event_index}-{symbol}
+- symbol must not contain '-' (hyphen). If it does, replace with '_'.
+- Must be unique and deterministic per PositionDeltaEvent
+- Used across OrderIntent and OrderResult for traceability
 
 ## Safety Modes
 - ARMED_LIVE: full operation
