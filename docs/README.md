@@ -1,0 +1,39 @@
+# Hyperliquid Copy Trader - Technical Docs
+
+This is the primary documentation set for the refactored, modular system.
+
+## Development Approach
+Documentation is created up front but filled in progressively. During MVP, only the most
+critical documents are fully specified. Other documents may contain placeholders or partial
+content and will be completed as the system stabilizes.
+
+## Document Map
+Core
+- ARCHITECTURE.md: System overview, module boundaries, data flow, state machine
+- CONTRACTS.md: Cross-module data contracts and shared terminology
+- DATA_MODEL.md: Database schema and persistence rules
+- INTEGRATIONS.md: External API integration details
+- RUNBOOK.md: Operations and incident response
+- TEST_PLAN.md: Test strategy and coverage
+- THREAT_MODEL.md: Risk analysis and mitigations
+- DEPLOYMENT.md: Build, release, and configuration strategy
+- ADR.md: Architecture decision records
+- OBSERVABILITY.md: Metrics, logging, alerting, SLO/SLA targets
+
+Modules
+- modules/INGEST.md: Ingest/monitoring module spec
+- modules/DECISION.md: Decision/strategy module spec
+- modules/EXECUTION.md: Execution (order) module spec
+- modules/STORAGE.md: State and persistence module spec
+- modules/SAFETY.md: Reconciliation and safety module spec
+- modules/ORCHESTRATOR.md: Startup and lifecycle control spec
+- modules/OBSERVABILITY.md: Logging, metrics, alerting spec
+
+Archive
+- archive/: Legacy PRD and system design docs
+
+## Principles
+- Separate responsibilities by module boundary
+- Persist all critical state needed for safe restart
+- Fail fast on unsafe or inconsistent conditions
+- Prefer deterministic, auditable behavior over speed
