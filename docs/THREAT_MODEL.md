@@ -1,17 +1,29 @@
-# Threat Model
+# Threat Model (MVP)
 
 ## Assets
 - API credentials
 - Trading capital
-- Historical trade data
+- Position and order history
 
-## Threats
-- Key leakage
-- Replay or duplicate trading
-- Drift and desync
+## Core Threats and Mitigations
 
-## Mitigations
-- Secret redaction
-- Idempotency and dedup
-- Reconciliation and safety modes
+1) Key leakage
+- Risk: API keys exposed via logs or config leaks
+- Mitigation: strict redaction, no key logging, environment-based secrets
+
+2) Duplicate execution (replay / dedup failure)
+- Risk: repeated orders due to retries or backfill
+- Mitigation: processed_txs dedup + idempotent clientOrderId
+
+3) Drift and desync
+- Risk: local state diverges from exchange
+- Mitigation: startup + periodic reconciliation; ARMED_SAFE on critical drift
+
+4) Unsafe exposure increase
+- Risk: system adds risk during uncertainty
+- Mitigation: ARMED_SAFE gate; replay_policy close-only by default
+
+5) Storage corruption or loss
+- Risk: cursor and idempotency state lost
+- Mitigation: WAL, backups, and HALT on storage errors
 

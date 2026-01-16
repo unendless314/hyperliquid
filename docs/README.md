@@ -32,6 +32,24 @@ Modules
 Archive
 - archive/: Legacy PRD and system design docs
 
+## MVP Readiness
+Minimum viable docs to start coding:
+- ARCHITECTURE.md
+- CONTRACTS.md
+- DATA_MODEL.md
+- INTEGRATIONS.md
+- DEPLOYMENT.md
+- RUNBOOK.md
+- TEST_PLAN.md
+- OBSERVABILITY.md
+- modules/INGEST.md
+- modules/DECISION.md
+- modules/EXECUTION.md
+- modules/STORAGE.md
+- modules/SAFETY.md
+- modules/ORCHESTRATOR.md
+- modules/OBSERVABILITY.md
+
 ## Principles
 - Separate responsibilities by module boundary
 - Persist all critical state needed for safe restart
