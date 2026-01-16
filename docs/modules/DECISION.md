@@ -40,5 +40,15 @@ Exposure-increasing intents are blocked only when:
 - Replay policy forbids increase (backfill events)
 
 ## Sizing Notes
-- Use delta sizing for PositionDeltaEvent
-- Clamp to available balance and max add-on rules
+- Use delta sizing for PositionDeltaEvent.
+- Open/increase sizing supports fixed amount, proportional, or Kelly.
+- Close/decrease sizing uses proportional close by target ratio:
+  - If prev_target_net_position == 0: target_close_ratio = 0
+  - target_close_ratio = min(1, abs(delta_target_net_position) / abs(prev_target_net_position))
+  - local_close_qty = abs(local_current_position) * target_close_ratio
+  - Cap by closable_qty and apply reduce-only
+
+## Closable Quantity
+- closable_qty is the local position size available for reduce-only orders.
+- If closable_qty == 0, skip the close intent with a warning.
+

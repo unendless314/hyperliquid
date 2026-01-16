@@ -21,6 +21,9 @@ Rules:
 - FLIP must split into open_component and close_component
 - is_replay is true for backfill events
 - Event ordering uses (timestamp_ms, event_index, tx_hash, symbol)
+- For partial closes, target_close_ratio = abs(delta) / abs(prev_target_net_position)
+  - If prev_target_net_position == 0, target_close_ratio = 0
+  - Clamp target_close_ratio to [0, 1]
 
 ## OrderIntent
 Produced by Decision and consumed by Execution.
