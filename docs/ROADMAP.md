@@ -32,6 +32,7 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Implement orchestrator lifecycle in src/hyperliquid/orchestrator/service.py
   - [ ] Task: Implement main.py startup/shutdown flow
   - Acceptance: A single "boot" cycle runs end-to-end
+  - Note: Continuous run loop is a placeholder; real ingest-driven loops will replace it.
 
 - [ ] Story 0.5: Contracts & data model baseline
   - [ ] Task: Map docs/CONTRACTS.md structures into src/hyperliquid/common/models.py

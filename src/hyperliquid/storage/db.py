@@ -124,11 +124,121 @@ def get_system_state(conn: sqlite3.Connection, key: str) -> Optional[str]:
     return str(row[0])
 
 
-def set_system_state(conn: sqlite3.Connection, key: str, value: str) -> None:
+def set_system_state(
+    conn: sqlite3.Connection, key: str, value: str, *, commit: bool = True
+) -> None:
     conn.execute(
         "INSERT INTO system_state(key, value, updated_at_ms) "
         "VALUES(?, ?, ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at_ms=excluded.updated_at_ms",
         (key, value, _now_ms()),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
+
+
+def event_key(timestamp_ms: int, event_index: int, tx_hash: str, symbol: str) -> str:
+    return f"{timestamp_ms}|{event_index}|{tx_hash}|{symbol}"
+
+
+def has_processed_tx(
+    conn: sqlite3.Connection, tx_hash: str, event_index: int, symbol: str
+) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM processed_txs WHERE tx_hash = ? AND event_index = ? AND symbol = ?",
+        (tx_hash, event_index, symbol),
+    ).fetchone()
+    return row is not None
+
+
+def record_processed_tx(
+    conn: sqlite3.Connection,
+    *,
+    tx_hash: str,
+    event_index: int,
+    symbol: str,
+    timestamp_ms: int,
+    is_replay: int,
+    commit: bool = True,
+) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO processed_txs("
+        "tx_hash, event_index, symbol, timestamp_ms, is_replay, created_at_ms"
+        ") VALUES(?, ?, ?, ?, ?, ?)",
+        (tx_hash, event_index, symbol, timestamp_ms, is_replay, _now_ms()),
+    )
+    if commit:
+        conn.commit()
+
+
+def update_cursor(
+    conn: sqlite3.Connection,
+    *,
+    timestamp_ms: int,
+    event_index: int,
+    tx_hash: str,
+    symbol: str,
+    commit: bool = True,
+) -> None:
+    set_system_state(
+        conn, "last_processed_timestamp_ms", str(timestamp_ms), commit=False
+    )
+    set_system_state(
+        conn,
+        "last_processed_event_key",
+        event_key(timestamp_ms, event_index, tx_hash, symbol),
+        commit=False,
+    )
+    if commit:
+        conn.commit()
+
+
+def should_advance_cursor(
+    current_key: Optional[str],
+    *,
+    timestamp_ms: int,
+    event_index: int,
+    tx_hash: str,
+    symbol: str,
+) -> bool:
+    if not current_key:
+        return True
+    current_parts = current_key.split("|", 3)
+    if len(current_parts) != 4:
+        return True
+    current_ts = int(current_parts[0])
+    current_index = int(current_parts[1])
+    current_tx = current_parts[2]
+    current_symbol = current_parts[3]
+    current_tuple = (current_ts, current_index, current_tx, current_symbol)
+    next_tuple = (timestamp_ms, event_index, tx_hash, symbol)
+    return next_tuple > current_tuple
+
+
+def advance_cursor_if_newer(
+    conn: sqlite3.Connection,
+    *,
+    timestamp_ms: int,
+    event_index: int,
+    tx_hash: str,
+    symbol: str,
+    commit: bool = True,
+) -> bool:
+    current_key = get_system_state(conn, "last_processed_event_key")
+    if should_advance_cursor(
+        current_key,
+        timestamp_ms=timestamp_ms,
+        event_index=event_index,
+        tx_hash=tx_hash,
+        symbol=symbol,
+    ):
+        update_cursor(
+            conn,
+            timestamp_ms=timestamp_ms,
+            event_index=event_index,
+            tx_hash=tx_hash,
+            symbol=symbol,
+            commit=commit,
+        )
+        return True
+    return False

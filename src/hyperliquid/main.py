@@ -20,7 +20,27 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Path to config/settings.yaml",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--emit-boot-event",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Emit a single mock event on startup",
+    )
+    parser.add_argument(
+        "--run-loop",
+        action="store_true",
+        help="Enter placeholder run loop after startup",
+    )
+    parser.add_argument(
+        "--loop-interval-sec",
+        type=int,
+        default=5,
+        help="Loop interval in seconds for placeholder run loop",
+    )
+    args = parser.parse_args()
+    if args.loop_interval_sec < 1:
+        raise SystemExit("--loop-interval-sec must be >= 1")
+    return args
 
 
 def main() -> int:
@@ -29,7 +49,13 @@ def main() -> int:
     schema_path = Path("config/schema.json")
 
     settings = load_settings(config_path, schema_path)
-    orchestrator = Orchestrator(settings=settings, mode=args.mode)
+    orchestrator = Orchestrator(
+        settings=settings,
+        mode=args.mode,
+        emit_boot_event=args.emit_boot_event,
+        run_loop=args.run_loop,
+        loop_interval_sec=args.loop_interval_sec,
+    )
     orchestrator.run()
     return 0
 

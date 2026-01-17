@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+import sqlite3
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, List, Optional
 
 from hyperliquid.common.models import PositionDeltaEvent, assert_contract_version
+from hyperliquid.storage.db import (
+    advance_cursor_if_newer,
+    has_processed_tx,
+    record_processed_tx,
+)
+
+
+@dataclass(frozen=True)
+class RawPositionEvent:
+    symbol: str
+    tx_hash: str
+    event_index: int
+    prev_target_net_position: float
+    next_target_net_position: float
+    is_replay: int = 0
+    timestamp_ms: Optional[int] = None
+    open_component: Optional[float] = None
+    close_component: Optional[float] = None
 
 
 @dataclass
@@ -53,3 +72,42 @@ class IngestService:
         )
         assert_contract_version(event.contract_version)
         return event
+
+    def ingest_raw_events(
+        self, raw_events: Iterable[RawPositionEvent], conn: sqlite3.Connection
+    ) -> List[PositionDeltaEvent]:
+        events: List[PositionDeltaEvent] = []
+        for raw in raw_events:
+            if has_processed_tx(conn, raw.tx_hash, raw.event_index, raw.symbol):
+                continue
+            event = self.build_position_delta_event(
+                symbol=raw.symbol,
+                tx_hash=raw.tx_hash,
+                event_index=raw.event_index,
+                prev_target_net_position=raw.prev_target_net_position,
+                next_target_net_position=raw.next_target_net_position,
+                is_replay=raw.is_replay,
+                timestamp_ms=raw.timestamp_ms,
+                open_component=raw.open_component,
+                close_component=raw.close_component,
+            )
+            with conn:
+                record_processed_tx(
+                    conn,
+                    tx_hash=event.tx_hash,
+                    event_index=event.event_index,
+                    symbol=event.symbol,
+                    timestamp_ms=event.timestamp_ms,
+                    is_replay=event.is_replay,
+                    commit=False,
+                )
+                advance_cursor_if_newer(
+                    conn,
+                    timestamp_ms=event.timestamp_ms,
+                    event_index=event.event_index,
+                    tx_hash=event.tx_hash,
+                    symbol=event.symbol,
+                    commit=False,
+                )
+            events.append(event)
+        return events

@@ -66,3 +66,6 @@ Minimum viable docs to start coding:
 
 ## Local Testing Notes
 - If running tests without installing the package, set PYTHONPATH=src (e.g., PYTHONPATH=src python3 -m pytest tests/unit/test_decision_flip.py)
+
+## Runtime Notes
+- main.py supports a placeholder loop via --run-loop; real ingest-driven loops are deferred until external adapters land.

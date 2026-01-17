@@ -20,6 +20,9 @@ from hyperliquid.storage.persistence import DbPersistence
 class Orchestrator:
     settings: Settings
     mode: str
+    emit_boot_event: bool = True
+    run_loop: bool = False
+    loop_interval_sec: int = 5
 
     def run(self) -> None:
         logger = setup_logging(self.settings.app_log_path, self.settings.log_level)
@@ -35,9 +38,11 @@ class Orchestrator:
             self._record_config(conn, config_hash)
             self._ensure_bootstrap_state(conn)
             services = self._initialize_services(conn)
-            self._run_single_cycle(services, logger)
-
+            if self.emit_boot_event:
+                self._run_single_cycle(services, logger)
             logger.info("boot_complete", extra={"mode": self.mode})
+            if self.run_loop:
+                self._run_loop(logger, metrics)
             metrics.emit("cursor_lag_ms", 0)
         except RuntimeError as exc:
             if str(exc) == "SCHEMA_VERSION_MISMATCH" and conn is not None:
@@ -50,6 +55,8 @@ class Orchestrator:
                     conn, "safety_changed_at_ms", str(int(time.time() * 1000))
                 )
             raise
+        except KeyboardInterrupt:
+            logger.info("shutdown_requested")
         finally:
             metrics.close()
             if conn is not None:
@@ -154,3 +161,10 @@ class Orchestrator:
                     "status": result.status,
                 },
             )
+
+    def _run_loop(self, logger, metrics) -> None:
+        logger.info("loop_start", extra={"interval_sec": self.loop_interval_sec})
+        while True:
+            metrics.emit("heartbeat", 1)
+            logger.info("loop_tick")
+            time.sleep(self.loop_interval_sec)

@@ -92,3 +92,5 @@ Expected:
 - Unit (single test file): PYTHONPATH=src python3 -m pytest tests/unit/test_decision_flip.py
 - Unit (pipeline test): PYTHONPATH=src python3 -m pytest tests/unit/test_pipeline.py
 - Unit (db persistence test): PYTHONPATH=src python3 -m pytest tests/unit/test_db_persistence.py
+- Unit (dedup/cursor test): PYTHONPATH=src python3 -m pytest tests/unit/test_dedup_logic.py
+- Unit (cursor order test): PYTHONPATH=src python3 -m pytest tests/unit/test_ingest_cursor_order.py
