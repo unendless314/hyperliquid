@@ -8,6 +8,9 @@ critical documents are fully specified. Other documents may contain placeholders
 content and will be completed as the system stabilizes.
 
 ## Document Map
+Progress
+- ROADMAP.md: Epic/story/task tracking for delivery progress
+
 Core
 - ARCHITECTURE.md: System overview, module boundaries, data flow, state machine
 - CONTRACTS.md: Cross-module data contracts and shared terminology
@@ -55,3 +58,8 @@ Minimum viable docs to start coding:
 - Persist all critical state needed for safe restart
 - Fail fast on unsafe or inconsistent conditions
 - Prefer deterministic, auditable behavior over speed
+
+## Future Work / Out of Scope (MVP)
+- Capital exposure limits (daily/weekly loss caps, per-leader allocation caps) are user-managed and not enforced by the system yet.
+- Strategy effectiveness monitoring (leader performance drift, auto-disable rules) is intentionally deferred.
+- Operator-level emergency stop procedures are documented in RUNBOOK but not automated.

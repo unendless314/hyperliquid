@@ -1,31 +1,40 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Primary docs live in `docs/`; treat `docs/README.md` as the system map before editing any other files.
-- Core specifications are under `docs/{ARCHITECTURE,CONTRACTS,DATA_MODEL,INTEGRATIONS,RUNBOOK,TEST_PLAN,THREAT_MODEL,DEPLOYMENT,OBSERVABILITY,ADR}`—update both doc text and heading metadata when a spec changes.
-- Module specs reside in `docs/modules/` (e.g., `modules/INGEST.md`, `modules/DECISION.md`); align headings/responsibilities with their code counterparts.
-- Legacy artifacts stay in `docs/archive/`; reference them only for historical context, not active development.
+- `src/hyperliquid/` is the Python package root. Core modules are `ingest/`, `decision/`, `execution/`, `storage/`, `safety/`, `orchestrator/`, and `observability/`, with shared utilities in `common/`.
+- `docs/` contains the system specs and operating docs (see `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, and `docs/modules/*`); treat `docs/README.md` as the system map before editing any other files.
+- `tests/` is organized by scope: `unit/`, `integration/`, and `chaos/`.
+- `config/` holds configuration files such as `config/settings.yaml` and `config/schema.json`.
+- `tools/` contains operational scripts (e.g., config validation and hashing).
 
 ## Build, Test, and Development Commands
-- Refer to `docs/DEPLOYMENT.md` for the release flow (build → deploy → verify) and document any new scripts with sample invocations.
-- Validate `settings.yaml` and `config_hash` each time you touch config; add new helper commands to the deployment doc so they’re discoverable.
-- If you add local automation (shell, Docker, etc.), note the exact command, inputs, and target environment beside the relevant section in `DEPLOYMENT.md`.
+- Create a local venv and install dependencies:
+  - `python -m venv .venv`
+  - `. .venv/bin/activate`
+  - `pip install -r requirements.txt`
+- Validate configuration: `python tools/validate_config.py --config config/settings.yaml --schema config/schema.json`
+- Compute config hash: `python tools/hash_config.py --config config/settings.yaml`
+- Run modes:
+  - `python src/hyperliquid/main.py --mode live --config config/settings.yaml`
+  - `python src/hyperliquid/main.py --mode dry-run --config config/settings.yaml`
+  - `python src/hyperliquid/main.py --mode backfill-only --config config/settings.yaml`
+- Testing is currently defined by `docs/TEST_PLAN.md` (manual/ops checks); see that file for step-by-step verification.
 
 ## Coding Style & Naming Conventions
-- Mirror the vocabulary from docs (e.g., `PositionDeltaEvent`, `cursor_mode`, `replay_policy`) and keep module folder names consistent with their spec files.
-- Prefer the established conventional-commit prefixes (`feat`, `fix`, `docs`, `refactor`, etc.) to keep history machine-readable.
-- Keep doc/code terminology aligned: structured headings, bullet lists, and repeated names help new contributors map prose to implementation.
+- Python 3.10+ (see `pyproject.toml`). Use 4-space indentation and standard PEP 8 naming.
+- Prefer `snake_case` for functions/variables, `PascalCase` for classes, and module names that mirror the subsystem (e.g., `ingest/`, `execution/`).
+- Keep module boundaries aligned with `docs/modules/*` and cross-module contracts in `docs/CONTRACTS.md`.
 
 ## Testing Guidelines
-- The strategy lives in `docs/TEST_PLAN.md`—unit checks for validation/dedupe, integration tests against Binance testnet and WebSocket reconnection, and chaos tests for throttling/network faults.
-- Name test suites descriptively (`test_settings_validation`, `test_ws_reconnect_backfill`) and document the scope in the test plan for quick discovery.
-- When adding tests, list the commands you ran (even if manual) within `docs/TEST_PLAN.md` so reviewers know how to reproduce failures.
+- Place unit tests under `tests/unit/`, integration tests under `tests/integration/`, and chaos tests under `tests/chaos/`.
+- Use `test_*.py` naming (see TODOs listed in `docs/TEST_PLAN.md`).
+- Runtime validation often involves SQLite and log inspection; examples are in `docs/TEST_PLAN.md` (e.g., `sqlite3 <db_path> ...`, `tail -n 50 <metrics_log_path>`).
 
 ## Commit & Pull Request Guidelines
-- Use conventional commit syntax, keeping the subject short and scope-specific if helpful (e.g., `feat(ingest): improve backfill dedupe`).
-- PR descriptions should cite touched docs/modules, list commands executed, and link to any related issue or ADR.
-- Supply proof (logs, screenshots, metrics) when behavior needs verification so reviewers don’t have to reproduce everything themselves.
+- Commit history follows Conventional Commits, e.g., `docs: ...` and `chore: ...`.
+- Keep messages short and scoped; include the subsystem when helpful (e.g., `docs: update execution idempotency notes`).
+- PRs should include: a brief summary, how you tested (or why not), and any config/logging impacts (especially changes to `config/settings.yaml`).
 
-## Documentation & Knowledge Base
-- Sync updates: when module behavior changes, edit both the module spec (`docs/modules/*.md`) and the overview map (`docs/README.md`).
-- Drop operational notes (alerts, metrics, runbook steps) into `docs/OBSERVABILITY.md` or `docs/RUNBOOK.md`; avoid ad hoc notes outside the docs tree.
+## Configuration & Ops Notes
+- `config/settings.yaml` is required at startup; validate it and record the hash before running.
+- Operational checks and rollback guidance live in `docs/DEPLOYMENT.md` and `docs/RUNBOOK.md`.
