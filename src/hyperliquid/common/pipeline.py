@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Iterable, List, Optional
+
+from hyperliquid.common.models import OrderIntent, OrderResult, PositionDeltaEvent
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.execution.service import ExecutionService
+from hyperliquid.storage.persistence import Persistence
+
+
+@dataclass
+class Pipeline:
+    decision: DecisionService
+    execution: ExecutionService
+    persistence: Optional[Persistence] = None
+
+    def process_events(self, events: Iterable[PositionDeltaEvent]) -> List[OrderResult]:
+        results: List[OrderResult] = []
+        for event in events:
+            intents = self.decision.decide(event)
+            for intent in intents:
+                if self.persistence is not None:
+                    record_intent = getattr(self.persistence, "record_intent", None)
+                    if callable(record_intent):
+                        record_intent(intent)
+                results.append(self.execution.execute(intent))
+                if self.persistence is not None:
+                    record_result = getattr(self.persistence, "record_result", None)
+                    if callable(record_result):
+                        record_result(results[-1])
+        return results
+
+    def process_single_event(self, event: PositionDeltaEvent) -> List[OrderResult]:
+        return self.process_events([event])

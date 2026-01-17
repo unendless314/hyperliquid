@@ -45,6 +45,7 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Implement ingest service interface in src/hyperliquid/ingest/service.py
   - [ ] Task: Define ingest event models in src/hyperliquid/common/models.py
   - Acceptance: Ingest can be instantiated and emit mock events using models from Story 0.5
+  - Note: Initial pipeline runs in event-driven mode; raw ingest wiring is deferred until external adapters land.
 
 - [ ] Story 1.2: External integration hooks
   - [ ] Task: Add integration adapter stubs based on docs/INTEGRATIONS.md

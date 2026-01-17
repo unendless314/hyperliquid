@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from hyperliquid.common.logging import setup_logging
 from hyperliquid.common.metrics import MetricsEmitter
 from hyperliquid.common.models import CONTRACT_VERSION, assert_contract_version
+from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.ingest.service import IngestService
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
+from hyperliquid.storage.persistence import DbPersistence
 
 
 @dataclass
@@ -32,7 +34,8 @@ class Orchestrator:
             self._handle_config_hash(conn, config_hash, logger)
             self._record_config(conn, config_hash)
             self._ensure_bootstrap_state(conn)
-            self._initialize_services(conn)
+            services = self._initialize_services(conn)
+            self._run_single_cycle(services, logger)
 
             logger.info("boot_complete", extra={"mode": self.mode})
             metrics.emit("cursor_lag_ms", 0)
@@ -105,7 +108,7 @@ class Orchestrator:
             set_system_state(conn, "safety_changed_at_ms", str(now_ms))
 
     @staticmethod
-    def _initialize_services(conn) -> None:
+    def _initialize_services(conn) -> dict[str, object]:
         def safety_mode_provider() -> str:
             return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
 
@@ -117,4 +120,37 @@ class Orchestrator:
         decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
         ingest_service = IngestService()
 
-        _ = (safety_service, execution_service, decision_service, ingest_service)
+        return {
+            "safety": safety_service,
+            "execution": execution_service,
+            "decision": decision_service,
+            "ingest": ingest_service,
+            "pipeline": Pipeline(
+                decision=decision_service,
+                execution=execution_service,
+                persistence=DbPersistence(conn),
+            ),
+        }
+
+    @staticmethod
+    def _run_single_cycle(services: dict[str, object], logger) -> None:
+        ingest: IngestService = services["ingest"]  # type: ignore[assignment]
+        pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
+
+        event = ingest.build_position_delta_event(
+            symbol="BTCUSDT",
+            tx_hash="boot",
+            event_index=0,
+            prev_target_net_position=0.0,
+            next_target_net_position=0.01,
+            is_replay=0,
+        )
+        results = pipeline.process_single_event(event)
+        for result in results:
+            logger.info(
+                "boot_cycle_result",
+                extra={
+                    "correlation_id": result.correlation_id,
+                    "status": result.status,
+                },
+            )

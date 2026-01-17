@@ -32,6 +32,7 @@ class ExecutionService:
             )
             for hook in self.post_hooks:
                 hook(intent, result)
+            assert_contract_version(result.contract_version)
             return result
 
         result = OrderResult(
@@ -45,4 +46,5 @@ class ExecutionService:
         )
         for hook in self.post_hooks:
             hook(intent, result)
+        assert_contract_version(result.contract_version)
         return result

@@ -90,3 +90,5 @@ Expected:
 - Dry-run: python src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
 - Backfill-only: python src/hyperliquid/main.py --mode backfill-only --config config/settings.yaml
 - Unit (single test file): PYTHONPATH=src python3 -m pytest tests/unit/test_decision_flip.py
+- Unit (pipeline test): PYTHONPATH=src python3 -m pytest tests/unit/test_pipeline.py
+- Unit (db persistence test): PYTHONPATH=src python3 -m pytest tests/unit/test_db_persistence.py
