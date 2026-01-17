@@ -42,4 +42,6 @@
 - POSITION_MODE_INVALID: exchange is not in one-way mode
 - STORAGE_UNAVAILABLE: DB unavailable or corrupted
 - CONFIG_HASH_MISMATCH: config_hash differs from recorded value
-
+- CONFIG_HASH_CHANGED: config_hash changed but allowed by operator policy
+- CONTRACT_VERSION_MISMATCH: contract version differs from recorded value
+- SCHEMA_VERSION_MISMATCH: DB schema version differs from expected value

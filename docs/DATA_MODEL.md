@@ -66,6 +66,7 @@ Required Keys:
 - last_processed_event_key (timestamp_ms|event_index|tx_hash|symbol)
 - config_hash
 - config_version
+- contract_version
 - safety_mode
 - safety_reason_code
 - safety_reason_message

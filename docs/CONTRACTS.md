@@ -72,3 +72,13 @@ Rules:
 - ARMED_LIVE: full operation
 - ARMED_SAFE: no exposure increase; allow reduce-only if configured
 - HALT: stop processing new events and orders
+
+## Contract Versioning
+- contract_version format: MAJOR.MINOR (e.g., 1.0)
+- Compatibility rule: producer major must equal consumer major; producer minor must be <= consumer minor.
+- On mismatch, the consumer must fail fast and enter HALT (reason: CONTRACT_VERSION_MISMATCH).
+- Version policy is implemented in src/hyperliquid/common/models.py.
+
+## Operator Policy Note
+- This deployment opts to continue on config hash changes while recording a safety_reason_code of CONFIG_HASH_CHANGED.
+- This is an operator choice for single-user deployments; stricter environments should HALT on config changes.
