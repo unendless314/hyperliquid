@@ -89,4 +89,4 @@ Expected:
 - Live (testnet): python src/hyperliquid/main.py --mode live --config config/settings.yaml
 - Dry-run: python src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
 - Backfill-only: python src/hyperliquid/main.py --mode backfill-only --config config/settings.yaml
-
+- Unit (single test file): PYTHONPATH=src python3 -m pytest tests/unit/test_decision_flip.py

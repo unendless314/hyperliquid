@@ -63,9 +63,10 @@ Rules:
 - Replay policy applies only to backfilled events (PositionDeltaEvent.is_replay).
 
 ## Correlation ID
-- Format: hl-{tx_hash}-{event_index}-{symbol}
+- Format: hl-{tx_hash}-{event_index}-{symbol}[-{suffix}]
 - symbol must not contain '-' (hyphen). If it does, replace with '_'.
 - Must be unique and deterministic per PositionDeltaEvent
+- For FLIP intents, append a suffix: "-close" for reduce-only close, "-open" for new exposure.
 - Used across OrderIntent and OrderResult for traceability
 
 ## Safety Modes

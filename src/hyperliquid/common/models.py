@@ -38,9 +38,14 @@ def assert_contract_version(producer_version: str) -> None:
         )
 
 
-def correlation_id(tx_hash: str, event_index: int, symbol: str) -> str:
+def correlation_id(
+    tx_hash: str, event_index: int, symbol: str, suffix: str | None = None
+) -> str:
     sanitized_symbol = symbol.replace("-", "_")
-    return f"hl-{tx_hash}-{event_index}-{sanitized_symbol}"
+    base = f"hl-{tx_hash}-{event_index}-{sanitized_symbol}"
+    if suffix:
+        return f"{base}-{suffix}"
+    return base
 
 
 @dataclass

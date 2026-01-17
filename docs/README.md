@@ -63,3 +63,6 @@ Minimum viable docs to start coding:
 - Capital exposure limits (daily/weekly loss caps, per-leader allocation caps) are user-managed and not enforced by the system yet.
 - Strategy effectiveness monitoring (leader performance drift, auto-disable rules) is intentionally deferred.
 - Operator-level emergency stop procedures are documented in RUNBOOK but not automated.
+
+## Local Testing Notes
+- If running tests without installing the package, set PYTHONPATH=src (e.g., PYTHONPATH=src python3 -m pytest tests/unit/test_decision_flip.py)

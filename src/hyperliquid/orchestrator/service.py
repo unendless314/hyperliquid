@@ -7,6 +7,10 @@ from hyperliquid.common.logging import setup_logging
 from hyperliquid.common.metrics import MetricsEmitter
 from hyperliquid.common.models import CONTRACT_VERSION, assert_contract_version
 from hyperliquid.common.settings import Settings, compute_config_hash
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.execution.service import ExecutionService
+from hyperliquid.ingest.service import IngestService
+from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
 
 
@@ -28,6 +32,7 @@ class Orchestrator:
             self._handle_config_hash(conn, config_hash, logger)
             self._record_config(conn, config_hash)
             self._ensure_bootstrap_state(conn)
+            self._initialize_services(conn)
 
             logger.info("boot_complete", extra={"mode": self.mode})
             metrics.emit("cursor_lag_ms", 0)
@@ -98,3 +103,18 @@ class Orchestrator:
             set_system_state(conn, "safety_reason_message", "Initial bootstrap state")
         if get_system_state(conn, "safety_changed_at_ms") is None:
             set_system_state(conn, "safety_changed_at_ms", str(now_ms))
+
+    @staticmethod
+    def _initialize_services(conn) -> None:
+        def safety_mode_provider() -> str:
+            return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
+
+        safety_service = SafetyService(safety_mode_provider=safety_mode_provider)
+        execution_service = ExecutionService(
+            pre_hooks=[safety_service.pre_execution_check],
+            post_hooks=[safety_service.post_execution_check],
+        )
+        decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
+        ingest_service = IngestService()
+
+        _ = (safety_service, execution_service, decision_service, ingest_service)
