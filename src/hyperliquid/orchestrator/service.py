@@ -10,9 +10,10 @@ from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.service import ExecutionService
-from hyperliquid.ingest.service import IngestService
+from hyperliquid.ingest.service import IngestService, RawPositionEvent
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
+from hyperliquid.storage.safety import set_safety_state
 from hyperliquid.storage.persistence import DbPersistence
 
 
@@ -39,20 +40,18 @@ class Orchestrator:
             self._ensure_bootstrap_state(conn)
             services = self._initialize_services(conn)
             if self.emit_boot_event:
-                self._run_single_cycle(services, logger)
+                self._run_single_cycle(services, conn, logger)
             logger.info("boot_complete", extra={"mode": self.mode})
             if self.run_loop:
                 self._run_loop(logger, metrics)
             metrics.emit("cursor_lag_ms", 0)
         except RuntimeError as exc:
             if str(exc) == "SCHEMA_VERSION_MISMATCH" and conn is not None:
-                set_system_state(conn, "safety_mode", "HALT")
-                set_system_state(conn, "safety_reason_code", "SCHEMA_VERSION_MISMATCH")
-                set_system_state(
-                    conn, "safety_reason_message", "DB schema version mismatch"
-                )
-                set_system_state(
-                    conn, "safety_changed_at_ms", str(int(time.time() * 1000))
+                set_safety_state(
+                    conn,
+                    mode="HALT",
+                    reason_code="SCHEMA_VERSION_MISMATCH",
+                    reason_message="DB schema version mismatch",
                 )
             raise
         except KeyboardInterrupt:
@@ -69,15 +68,13 @@ class Orchestrator:
             logger.warning("config_hash_changed", extra={"previous": existing})
             if get_system_state(conn, "safety_mode") == "HALT":
                 return
-            if get_system_state(conn, "safety_mode") is None:
-                set_system_state(conn, "safety_mode", "ARMED_SAFE")
-            set_system_state(conn, "safety_reason_code", "CONFIG_HASH_CHANGED")
-            set_system_state(
+            mode = get_system_state(conn, "safety_mode") or "ARMED_SAFE"
+            set_safety_state(
                 conn,
-                "safety_reason_message",
-                "Config hash changed; continuing per operator policy",
+                mode=mode,
+                reason_code="CONFIG_HASH_CHANGED",
+                reason_message="Config hash changed; continuing per operator policy",
             )
-            set_system_state(conn, "safety_changed_at_ms", str(int(time.time() * 1000)))
 
     def _record_config(self, conn, config_hash: str) -> None:
         set_system_state(conn, "config_hash", config_hash)
@@ -92,10 +89,12 @@ class Orchestrator:
             try:
                 assert_contract_version(existing)
             except ValueError as exc:
-                set_system_state(conn, "safety_mode", "HALT")
-                set_system_state(conn, "safety_reason_code", "CONTRACT_VERSION_MISMATCH")
-                set_system_state(conn, "safety_reason_message", str(exc))
-                set_system_state(conn, "safety_changed_at_ms", str(int(time.time() * 1000)))
+                set_safety_state(
+                    conn,
+                    mode="HALT",
+                    reason_code="CONTRACT_VERSION_MISMATCH",
+                    reason_message=str(exc),
+                )
                 raise
 
     @staticmethod
@@ -140,11 +139,11 @@ class Orchestrator:
         }
 
     @staticmethod
-    def _run_single_cycle(services: dict[str, object], logger) -> None:
+    def _run_single_cycle(services: dict[str, object], conn, logger) -> None:
         ingest: IngestService = services["ingest"]  # type: ignore[assignment]
         pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
 
-        event = ingest.build_position_delta_event(
+        raw_event = RawPositionEvent(
             symbol="BTCUSDT",
             tx_hash="boot",
             event_index=0,
@@ -152,7 +151,8 @@ class Orchestrator:
             next_target_net_position=0.01,
             is_replay=0,
         )
-        results = pipeline.process_single_event(event)
+        events = ingest.ingest_raw_events([raw_event], conn)
+        results = pipeline.process_events(events)
         for result in results:
             logger.info(
                 "boot_cycle_result",

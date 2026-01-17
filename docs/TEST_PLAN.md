@@ -94,3 +94,6 @@ Expected:
 - Unit (db persistence test): PYTHONPATH=src python3 -m pytest tests/unit/test_db_persistence.py
 - Unit (dedup/cursor test): PYTHONPATH=src python3 -m pytest tests/unit/test_dedup_logic.py
 - Unit (cursor order test): PYTHONPATH=src python3 -m pytest tests/unit/test_ingest_cursor_order.py
+- Unit (ingest+pipeline test): PYTHONPATH=src python3 -m pytest tests/unit/test_ingest_pipeline_integration.py
+- Unit (processed_txs TTL cleanup): PYTHONPATH=src python3 -m pytest tests/unit/test_processed_txs_ttl.py
+- Unit (replay policy): PYTHONPATH=src python3 -m pytest tests/unit/test_replay_policy.py

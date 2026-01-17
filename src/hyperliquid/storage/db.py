@@ -171,6 +171,17 @@ def record_processed_tx(
         conn.commit()
 
 
+def cleanup_processed_txs(conn: sqlite3.Connection, *, dedup_ttl_seconds: int) -> int:
+    if dedup_ttl_seconds < 0:
+        raise ValueError("dedup_ttl_seconds must be >= 0")
+    threshold_ms = _now_ms() - int(dedup_ttl_seconds) * 1000
+    cursor = conn.execute(
+        "DELETE FROM processed_txs WHERE created_at_ms < ?",
+        (threshold_ms,),
+    )
+    conn.commit()
+    return cursor.rowcount
+
 def update_cursor(
     conn: sqlite3.Connection,
     *,

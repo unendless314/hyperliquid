@@ -7,11 +7,17 @@ from hyperliquid.common.models import OrderIntent, PositionDeltaEvent, assert_co
 
 
 SafetyModeProvider = Callable[[], str]
+ReplayPolicyProvider = Callable[[], str]
+
+
+def _default_replay_policy() -> str:
+    return "close-only"
 
 
 @dataclass
 class DecisionService:
     safety_mode_provider: SafetyModeProvider
+    replay_policy_provider: ReplayPolicyProvider = _default_replay_policy
 
     def decide(self, event: PositionDeltaEvent) -> List[OrderIntent]:
         assert_contract_version(event.contract_version)
@@ -22,7 +28,7 @@ class DecisionService:
 
         if event.action_type == "FLIP":
             intents = self._build_flip_intents(event)
-            return self._apply_safety_gate(intents, safety_mode)
+            return self._apply_policy_gates(intents, safety_mode, event.is_replay)
 
         qty = abs(event.delta_target_net_position)
         if qty <= 0:
@@ -37,7 +43,7 @@ class DecisionService:
             qty=qty,
             reduce_only=reduce_only,
         )
-        return self._apply_safety_gate([intent], safety_mode)
+        return self._apply_policy_gates([intent], safety_mode, event.is_replay)
 
     @staticmethod
     def _build_intent(
@@ -99,8 +105,13 @@ class DecisionService:
             )
         return intents
 
-    @staticmethod
-    def _apply_safety_gate(intents: List[OrderIntent], safety_mode: str) -> List[OrderIntent]:
-        if safety_mode != "ARMED_SAFE":
-            return intents
-        return [intent for intent in intents if intent.reduce_only == 1]
+    def _apply_policy_gates(
+        self, intents: List[OrderIntent], safety_mode: str, is_replay: int
+    ) -> List[OrderIntent]:
+        if safety_mode == "ARMED_SAFE":
+            intents = [intent for intent in intents if intent.reduce_only == 1]
+        if is_replay:
+            policy = self.replay_policy_provider()
+            if policy == "close-only":
+                intents = [intent for intent in intents if intent.reduce_only == 1]
+        return intents

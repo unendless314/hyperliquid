@@ -39,6 +39,10 @@ Exposure-increasing intents are blocked only when:
 - Hard risk checks fail (slippage, filters, position mode, stale data)
 - Replay policy forbids increase (backfill events)
 
+## Replay Policy (MVP)
+- Default replay policy is close-only: for is_replay=1, only reduce-only intents are allowed.
+- Replay policy is enforced after safety gating.
+
 ## Sizing Notes
 - Use delta sizing for PositionDeltaEvent.
 - Open/increase sizing supports fixed amount, proportional, or Kelly.
@@ -51,4 +55,3 @@ Exposure-increasing intents are blocked only when:
 ## Closable Quantity
 - closable_qty is the local position size available for reduce-only orders.
 - If closable_qty == 0, skip the close intent with a warning.
-
