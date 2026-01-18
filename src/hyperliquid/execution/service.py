@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from hyperliquid.common.models import OrderIntent, OrderResult, assert_contract_version
 from hyperliquid.execution.adapters.binance import (
@@ -12,6 +12,7 @@ from hyperliquid.execution.adapters.binance import (
 
 PreExecutionHook = Callable[[OrderIntent], None]
 PostExecutionHook = Callable[[OrderIntent, OrderResult], None]
+ResultProvider = Callable[[str], Optional[OrderResult]]
 
 
 @dataclass
@@ -19,9 +20,17 @@ class ExecutionService:
     pre_hooks: List[PreExecutionHook] = field(default_factory=list)
     post_hooks: List[PostExecutionHook] = field(default_factory=list)
     adapter: BinanceExecutionAdapter | None = None
+    result_provider: Optional[ResultProvider] = None
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         assert_contract_version(intent.contract_version)
+        existing = None
+        if self.result_provider is not None:
+            existing = self.result_provider(intent.correlation_id)
+        if existing is not None:
+            assert_contract_version(existing.contract_version)
+            if existing.status in ("FILLED", "SUBMITTED", "UNKNOWN"):
+                return existing
         try:
             for hook in self.pre_hooks:
                 hook(intent)

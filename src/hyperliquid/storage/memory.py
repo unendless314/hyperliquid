@@ -16,6 +16,7 @@ class InMemoryPersistence:
     intents: List[OrderIntent] = field(default_factory=list)
     results: List[OrderResult] = field(default_factory=list)
     _client_order_ids: dict[str, str] = field(default_factory=dict, init=False)
+    _result_index: dict[str, int] = field(default_factory=dict, init=False)
 
     def ensure_intent(self, intent: OrderIntent) -> OrderIntent:
         existing = self._client_order_ids.get(intent.correlation_id)
@@ -38,4 +39,15 @@ class InMemoryPersistence:
         self.intents.append(intent)
 
     def record_result(self, result: OrderResult) -> None:
+        existing_index = self._result_index.get(result.correlation_id)
+        if existing_index is not None:
+            self.results[existing_index] = result
+            return
+        self._result_index[result.correlation_id] = len(self.results)
         self.results.append(result)
+
+    def get_order_result(self, correlation_id: str) -> OrderResult | None:
+        index = self._result_index.get(correlation_id)
+        if index is None:
+            return None
+        return self.results[index]

@@ -22,6 +22,7 @@
 - clientOrderId must be deterministic per event
 - Partial fills must be persisted
 - Unknown status is resolved via Reconciliation
+- Order results persist contract_version for recovery verification.
 
 ## Idempotency and clientOrderId
 - Format: hl-{tx_hash}-{event_index}-{symbol}-{nonce}
@@ -47,6 +48,7 @@ PENDING -> SUBMITTED -> PARTIALLY_FILLED -> FILLED | CANCELED | EXPIRED | REJECT
 - Insufficient balance: mark REJECTED with error_code
 - Rejected orders: record error_code and error_message
 - Unknown status: record retry_count and use backoff before next poll
+- Recovery short-circuits (existing SUBMITTED/UNKNOWN/FILLED) do not invoke post-execution hooks.
 
 ## Partial Fill Policy
 - PARTIALLY_FILLED is a normal state and does not by itself restrict future orders.

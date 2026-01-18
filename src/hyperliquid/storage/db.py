@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-DB_SCHEMA_VERSION = "1"
+DB_SCHEMA_VERSION = "2"
 
 
 def _now_ms() -> int:
@@ -81,6 +81,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             avg_price REAL,
             error_code TEXT,
             error_message TEXT,
+            contract_version TEXT NOT NULL,
             created_at_ms INTEGER NOT NULL,
             updated_at_ms INTEGER NOT NULL
         );

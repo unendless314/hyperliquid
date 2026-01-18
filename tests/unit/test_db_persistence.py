@@ -96,6 +96,28 @@ def test_db_persistence_result_updates() -> None:
         assert status_second == "FILLED"
 
 
+def test_db_persistence_result_contract_version_roundtrip() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        conn = init_db(tmp.name)
+        persistence = DbPersistence(conn)
+
+        result = OrderResult(
+            correlation_id="hl-abc-6-BTCUSDT",
+            exchange_order_id="ex-2",
+            status="SUBMITTED",
+            filled_qty=0.0,
+            avg_price=None,
+            error_code=None,
+            error_message=None,
+            contract_version="1.0",
+        )
+        persistence.record_result(result)
+
+        loaded = persistence.get_order_result(result.correlation_id)
+        assert loaded is not None
+        assert loaded.contract_version == "1.0"
+
+
 def test_db_persistence_ensure_intent_reuses_client_order_id() -> None:
     with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
         conn = init_db(tmp.name)

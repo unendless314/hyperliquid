@@ -91,6 +91,7 @@ Columns:
 - avg_price REAL
 - error_code TEXT
 - error_message TEXT
+- contract_version TEXT NOT NULL
 - created_at_ms INTEGER NOT NULL
 - updated_at_ms INTEGER NOT NULL
 

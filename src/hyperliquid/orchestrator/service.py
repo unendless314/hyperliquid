@@ -134,6 +134,7 @@ class Orchestrator:
             return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
 
         safety_service = SafetyService(safety_mode_provider=safety_mode_provider)
+        persistence = DbPersistence(conn)
         execution_adapter = None
         binance_cfg = self.settings.raw.get("execution", {}).get("binance", {})
         if self.mode == "live" and binance_cfg.get("enabled", False):
@@ -145,6 +146,7 @@ class Orchestrator:
             pre_hooks=[safety_service.pre_execution_check],
             post_hooks=[safety_service.post_execution_check],
             adapter=execution_adapter,
+            result_provider=persistence.get_order_result,
         )
         decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
         ingest_service = IngestService()
@@ -157,7 +159,7 @@ class Orchestrator:
             "pipeline": Pipeline(
                 decision=decision_service,
                 execution=execution_service,
-                persistence=DbPersistence(conn),
+                persistence=persistence,
             ),
         }
 

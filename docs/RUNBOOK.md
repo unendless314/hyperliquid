@@ -76,3 +76,6 @@ Checklist:
 ### Schema Updates
 - Apply migration scripts manually during MVP
 - Verify schema version and system_state
+- DB_SCHEMA_VERSION=2 adds order_results.contract_version (TEXT NOT NULL).
+  - For existing DBs: `ALTER TABLE order_results ADD COLUMN contract_version TEXT NOT NULL DEFAULT '1.0';`
+  - Update system_state.schema_version to "2" after migration.

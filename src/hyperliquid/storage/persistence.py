@@ -22,6 +22,9 @@ class Persistence(Protocol):
     def record_intent(self, intent: OrderIntent) -> None:
         ...
 
+    def get_order_result(self, correlation_id: str) -> Optional[OrderResult]:
+        ...
+
     def record_result(self, result: OrderResult) -> None:
         ...
 
@@ -96,8 +99,8 @@ class DbPersistence:
         self.conn.execute(
             "INSERT INTO order_results("
             "correlation_id, exchange_order_id, status, filled_qty, avg_price, error_code, "
-            "error_message, created_at_ms, updated_at_ms"
-            ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "error_message, contract_version, created_at_ms, updated_at_ms"
+            ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(correlation_id) DO UPDATE SET "
             "exchange_order_id=excluded.exchange_order_id, "
             "status=excluded.status, "
@@ -105,6 +108,7 @@ class DbPersistence:
             "avg_price=excluded.avg_price, "
             "error_code=excluded.error_code, "
             "error_message=excluded.error_message, "
+            "contract_version=excluded.contract_version, "
             "updated_at_ms=excluded.updated_at_ms",
             (
                 result.correlation_id,
@@ -114,11 +118,32 @@ class DbPersistence:
                 result.avg_price,
                 result.error_code,
                 result.error_message,
+                result.contract_version,
                 self._now_ms(),
                 self._now_ms(),
             ),
         )
         self.conn.commit()
+
+    def get_order_result(self, correlation_id: str) -> Optional[OrderResult]:
+        row = self.conn.execute(
+            "SELECT correlation_id, exchange_order_id, status, filled_qty, avg_price, "
+            "error_code, error_message, contract_version FROM order_results "
+            "WHERE correlation_id = ?",
+            (correlation_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return OrderResult(
+            correlation_id=row[0],
+            exchange_order_id=row[1],
+            status=row[2],
+            filled_qty=row[3],
+            avg_price=row[4],
+            error_code=row[5],
+            error_message=row[6],
+            contract_version=row[7],
+        )
 
     def _update_intent_payload(self, intent: OrderIntent) -> None:
         payload = json.dumps(asdict(intent), ensure_ascii=True)
@@ -151,6 +176,10 @@ class NoopPersistence:
 
     def record_intent(self, intent: OrderIntent) -> None:
         _ = intent
+
+    def get_order_result(self, correlation_id: str) -> Optional[OrderResult]:
+        _ = correlation_id
+        return None
 
     def record_result(self, result: OrderResult) -> None:
         _ = result
