@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
 from collections import deque
 from dataclasses import dataclass, field, replace
 from typing import Deque, Iterable, List, Optional
+from urllib import error as url_error
+from urllib import request as url_request
 
 from hyperliquid.ingest.service import RawPositionEvent
 
@@ -65,6 +68,7 @@ class HyperliquidIngestConfig:
     request_timeout_ms: int
     backfill_window_ms: int
     cursor_overlap_ms: int
+    symbol_map: dict[str, str]
     rate_limit: RateLimitPolicy
     retry: RetryPolicy
     stub_events: List[RawPositionEvent] = field(default_factory=list)
@@ -106,6 +110,7 @@ class HyperliquidIngestConfig:
             request_timeout_ms=int(hyperliquid.get("request_timeout_ms", 10_000)),
             backfill_window_ms=int(ingest.get("backfill_window_ms", 0)),
             cursor_overlap_ms=int(ingest.get("cursor_overlap_ms", 0)),
+            symbol_map={str(k): str(v) for k, v in hyperliquid.get("symbol_map", {}).items()},
             rate_limit=RateLimitPolicy(
                 max_requests=int(rate_limit.get("max_requests", 0)),
                 per_seconds=int(rate_limit.get("per_seconds", 1)),
@@ -136,8 +141,6 @@ class HyperliquidIngestAdapter:
     def fetch_backfill(self, *, since_ms: int, until_ms: int) -> List[RawPositionEvent]:
         if not self._config.enabled:
             return []
-        if self._config.mode != "stub":
-            raise NotImplementedError("Hyperliquid REST backfill adapter is not wired")
         if not self._rate_limiter.allow():
             self._logger.warning(
                 "ingest_rate_limited",
@@ -147,13 +150,15 @@ class HyperliquidIngestAdapter:
                 },
             )
             return []
-        return self._filter_stub_events(since_ms=since_ms, until_ms=until_ms)
+        if self._config.mode == "stub":
+            return self._filter_stub_events(since_ms=since_ms, until_ms=until_ms)
+        if self._config.mode == "live":
+            return self._fetch_backfill_live(since_ms=since_ms, until_ms=until_ms)
+        raise NotImplementedError(f"Unsupported ingest mode: {self._config.mode}")
 
     def poll_live_events(self, *, since_ms: int) -> List[RawPositionEvent]:
         if not self._config.enabled:
             return []
-        if self._config.mode != "stub":
-            raise NotImplementedError("Hyperliquid WS adapter is not wired")
         if not self._rate_limiter.allow():
             self._logger.warning(
                 "ingest_rate_limited",
@@ -163,7 +168,11 @@ class HyperliquidIngestAdapter:
                 },
             )
             return []
-        return self._filter_stub_events(since_ms=since_ms, until_ms=None)
+        if self._config.mode == "stub":
+            return self._filter_stub_events(since_ms=since_ms, until_ms=None)
+        if self._config.mode == "live":
+            return self._poll_live_rest(since_ms=since_ms)
+        raise NotImplementedError(f"Unsupported ingest mode: {self._config.mode}")
 
     def _filter_stub_events(
         self, *, since_ms: int, until_ms: Optional[int]
@@ -180,6 +189,120 @@ class HyperliquidIngestAdapter:
                 continue
             events.append(replace(event, timestamp_ms=timestamp_ms))
         return events
+
+    def _fetch_backfill_live(self, *, since_ms: int, until_ms: int) -> List[RawPositionEvent]:
+        if not self._config.target_wallet:
+            self._logger.warning("ingest_missing_target_wallet")
+            return []
+        events: List[RawPositionEvent] = []
+        end_time = until_ms
+        while end_time >= since_ms:
+            payload = {
+                "type": "userFillsByTime",
+                "user": self._config.target_wallet,
+                "startTime": since_ms,
+                "endTime": end_time,
+                "aggregateByTime": False,
+            }
+            fills = self._post_json(payload)
+            if not fills:
+                break
+            batch = self._fills_to_events(fills)
+            events.extend(batch)
+            oldest = self._oldest_fill_time(fills)
+            if oldest is None or oldest <= since_ms:
+                break
+            end_time = oldest - 1
+        return events
+
+    def _poll_live_rest(self, *, since_ms: int) -> List[RawPositionEvent]:
+        if not self._config.target_wallet:
+            self._logger.warning("ingest_missing_target_wallet")
+            return []
+        now_ms = int(time.time() * 1000)
+        return self._fetch_backfill_live(since_ms=since_ms, until_ms=now_ms)
+
+    def _post_json(self, payload: dict) -> List[dict]:
+        body = json.dumps(payload).encode("utf-8")
+        req = url_request.Request(
+            self._config.rest_url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        timeout = max(self._config.request_timeout_ms / 1000.0, 1.0)
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                with url_request.urlopen(req, timeout=timeout) as resp:
+                    data = resp.read().decode("utf-8")
+                parsed = json.loads(data)
+                if isinstance(parsed, list):
+                    return parsed
+                self._logger.warning("ingest_unexpected_response", extra={"payload": payload})
+                return []
+            except (url_error.URLError, json.JSONDecodeError) as exc:
+                if attempt >= max(self._config.retry.max_attempts, 1):
+                    self._logger.error(
+                        "ingest_rest_failed",
+                        extra={"error": str(exc), "attempts": attempt},
+                    )
+                    return []
+                delay_ms = self._config.retry.next_delay_ms(attempt)
+                time.sleep(delay_ms / 1000.0)
+
+    def _fills_to_events(self, fills: Iterable[dict]) -> List[RawPositionEvent]:
+        events: List[RawPositionEvent] = []
+        for fill in fills:
+            event = self._fill_to_raw(fill)
+            if event is not None:
+                events.append(event)
+        return events
+
+    def _fill_to_raw(self, fill: dict) -> Optional[RawPositionEvent]:
+        try:
+            coin = str(fill["coin"])
+            if coin.startswith("@") or coin not in self._config.symbol_map:
+                self._logger.warning(
+                    "ingest_unmapped_symbol",
+                    extra={"coin": coin},
+                )
+                return None
+            symbol = self._config.symbol_map[coin]
+            start_pos = float(fill.get("startPosition", 0.0))
+            size = float(fill.get("sz", 0.0))
+            side = str(fill.get("side", "")).upper()
+            delta = size if side == "B" else -size
+            next_pos = start_pos + delta
+            tx_hash = str(fill.get("hash") or f"tid-{fill.get('tid', '')}")
+            event_index = int(fill.get("tid", 0))
+            timestamp_ms = int(fill.get("time", 0))
+            open_component = None
+            close_component = None
+            if start_pos > 0 > next_pos or start_pos < 0 < next_pos:
+                close_component = abs(start_pos)
+                open_component = abs(next_pos)
+            return RawPositionEvent(
+                symbol=symbol,
+                tx_hash=tx_hash,
+                event_index=event_index,
+                prev_target_net_position=start_pos,
+                next_target_net_position=next_pos,
+                timestamp_ms=timestamp_ms,
+                open_component=open_component,
+                close_component=close_component,
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            self._logger.warning("ingest_fill_parse_failed", extra={"error": str(exc)})
+            return None
+
+    @staticmethod
+    def _oldest_fill_time(fills: Iterable[dict]) -> Optional[int]:
+        times = [int(fill.get("time", 0)) for fill in fills if "time" in fill]
+        if not times:
+            return None
+        return min(times)
 
     def close(self) -> None:
         return None

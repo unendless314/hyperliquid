@@ -15,6 +15,8 @@ ingest:
     rest_url: "https://api.hyperliquid.xyz/info"
     ws_url: ""
     request_timeout_ms: 10000
+    symbol_map:
+      BTC: "BTCUSDT"
     rate_limit:
       max_requests: 10
       per_seconds: 1

@@ -54,6 +54,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add integration adapter stubs based on docs/INTEGRATIONS.md
   - [x] Task: Add rate limit + retry policy placeholders
   - [x] Task: Add contract version assertion on ingest output
+  - [~] Task: Wire REST backfill/live polling adapter for Hyperliquid
   - Acceptance: Adapters can be wired without hitting live APIs
 
 ## Epic 2: Decision engine

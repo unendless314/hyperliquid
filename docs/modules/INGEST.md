@@ -7,6 +7,10 @@
 - Track target wallet net position
 - Emit PositionDeltaEvent
 
+## Adapter Status (MVP)
+- REST backfill and polling are wired for live mode (polling uses userFillsByTime to avoid 2000-row limits).
+- WebSocket streaming remains pending; live mode currently polls REST.
+
 ## Inputs
 - Hyperliquid user fills (WS + REST)
 - settings: cursor_mode, backfill_window, cursor_overlap_ms, replay_policy
@@ -14,6 +18,9 @@
 ## Configuration Notes
 - ingest.backfill_window_ms and ingest.cursor_overlap_ms control backfill gap handling.
 - ingest.hyperliquid.* configures the adapter (enabled, mode, endpoints, rate limit, retry).
+- ingest.hyperliquid.symbol_map maps Hyperliquid coin symbols to execution symbols (e.g., BTC -> BTCUSDT).
+- Unmapped coins (or spot-style @ symbols) are skipped with a warning to avoid trading the wrong market.
+- Coins not listed in symbol_map are not tracked for performance and will never generate orders.
 - Stub events can be injected via ingest.hyperliquid.stub_events for local runs without live APIs.
 
 ## Outputs
