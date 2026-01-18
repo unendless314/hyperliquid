@@ -9,7 +9,7 @@
 
 ## Adapter Status (MVP)
 - REST backfill and polling are wired for live mode (polling uses userFillsByTime to avoid 2000-row limits).
-- WebSocket streaming remains pending; live mode currently polls REST.
+- WebSocket streaming is wired when ws_url is configured; REST polling is the fallback if WS is stale or unavailable.
 
 ## Inputs
 - Hyperliquid user fills (WS + REST)

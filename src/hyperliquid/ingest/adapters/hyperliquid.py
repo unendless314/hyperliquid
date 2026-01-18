@@ -3,12 +3,18 @@ from __future__ import annotations
 import json
 import logging
 import random
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field, replace
 from typing import Deque, Iterable, List, Optional
 from urllib import error as url_error
 from urllib import request as url_request
+
+try:
+    import websocket
+except ImportError:  # pragma: no cover - optional runtime dependency
+    websocket = None
 
 from hyperliquid.ingest.service import RawPositionEvent
 
@@ -133,6 +139,15 @@ class HyperliquidIngestAdapter:
         self._config = config
         self._logger = logger or logging.getLogger("hyperliquid")
         self._rate_limiter = RateLimiter(config.rate_limit)
+        self._ws_app = None
+        self._ws_thread: Optional[threading.Thread] = None
+        self._ws_buffer: Deque[dict] = deque(maxlen=10_000)
+        self._ws_lock = threading.Lock()
+        self._ws_enabled = False
+        self._last_ws_message_ms: Optional[int] = None
+        self._last_ws_reconnect_ms: Optional[int] = None
+        if self._should_start_ws():
+            self._start_ws()
 
     @property
     def config(self) -> HyperliquidIngestConfig:
@@ -171,6 +186,8 @@ class HyperliquidIngestAdapter:
         if self._config.mode == "stub":
             return self._filter_stub_events(since_ms=since_ms, until_ms=None)
         if self._config.mode == "live":
+            if self._ws_enabled and self._ws_recent():
+                return self._poll_live_ws(since_ms=since_ms)
             return self._poll_live_rest(since_ms=since_ms)
         raise NotImplementedError(f"Unsupported ingest mode: {self._config.mode}")
 
@@ -221,6 +238,13 @@ class HyperliquidIngestAdapter:
             return []
         now_ms = int(time.time() * 1000)
         return self._fetch_backfill_live(since_ms=since_ms, until_ms=now_ms)
+
+    def _poll_live_ws(self, *, since_ms: int) -> List[RawPositionEvent]:
+        fills = self._drain_ws_fills()
+        if not fills:
+            return []
+        events = self._fills_to_events(fills)
+        return [event for event in events if (event.timestamp_ms or 0) >= since_ms]
 
     def _post_json(self, payload: dict) -> List[dict]:
         body = json.dumps(payload).encode("utf-8")
@@ -304,7 +328,121 @@ class HyperliquidIngestAdapter:
             return None
         return min(times)
 
+    def _should_start_ws(self) -> bool:
+        if self._config.mode != "live":
+            return False
+        if not self._config.enabled or not self._config.ws_url:
+            return False
+        if not self._config.target_wallet:
+            return False
+        if websocket is None:
+            self._logger.warning("ingest_ws_missing_dependency")
+            return False
+        return True
+
+    def _start_ws(self) -> None:
+        self._ws_app = websocket.WebSocketApp(
+            self._config.ws_url,
+            on_open=self._on_ws_open,
+            on_message=self._on_ws_message,
+            on_error=self._on_ws_error,
+            on_close=self._on_ws_close,
+        )
+        self._ws_thread = threading.Thread(
+            target=self._ws_app.run_forever,
+            kwargs={"ping_interval": 20, "ping_timeout": 10},
+            daemon=True,
+        )
+        self._ws_thread.start()
+
+    def _on_ws_open(self, _ws) -> None:
+        subscription = {
+            "method": "subscribe",
+            "subscription": {
+                "type": "userFills",
+                "user": self._config.target_wallet,
+                "aggregateByTime": False,
+            },
+        }
+        try:
+            _ws.send(json.dumps(subscription))
+            self._ws_enabled = True
+            self._last_ws_message_ms = int(time.time() * 1000)
+        except Exception as exc:
+            self._logger.error("ingest_ws_subscribe_failed", extra={"error": str(exc)})
+
+    def _on_ws_message(self, _ws, message: str) -> None:
+        try:
+            payload = json.loads(message)
+        except json.JSONDecodeError:
+            self._logger.warning("ingest_ws_bad_json")
+            return
+        self._last_ws_message_ms = int(time.time() * 1000)
+        if payload.get("isSnapshot") is True:
+            return
+        if payload.get("channel") != "userFills":
+            return
+        data = payload.get("data")
+        if isinstance(data, dict) and data.get("isSnapshot") is True:
+            return
+        fills: List[dict] = []
+        if isinstance(data, list):
+            fills = data
+        elif isinstance(data, dict):
+            if "fills" in data and isinstance(data["fills"], list):
+                fills = data["fills"]
+            elif "data" in data and isinstance(data["data"], list):
+                fills = data["data"]
+        if not fills:
+            return
+        with self._ws_lock:
+            before = len(self._ws_buffer)
+            self._ws_buffer.extend(fills)
+            after = len(self._ws_buffer)
+            if after < before + len(fills):
+                self._logger.warning("ingest_ws_buffer_dropped")
+        self._last_ws_message_ms = int(time.time() * 1000)
+
+    def _on_ws_error(self, _ws, error) -> None:
+        self._logger.warning("ingest_ws_error", extra={"error": str(error)})
+        self._schedule_ws_reconnect()
+
+    def _on_ws_close(self, _ws, status_code, msg) -> None:
+        self._ws_enabled = False
+        self._logger.warning(
+            "ingest_ws_closed",
+            extra={"status_code": status_code, "message": msg},
+        )
+        self._schedule_ws_reconnect()
+
+    def _drain_ws_fills(self) -> List[dict]:
+        with self._ws_lock:
+            if not self._ws_buffer:
+                return []
+            fills = list(self._ws_buffer)
+            self._ws_buffer.clear()
+            return fills
+
+    def _ws_recent(self) -> bool:
+        if self._last_ws_message_ms is None:
+            return False
+        return int(time.time() * 1000) - self._last_ws_message_ms <= 30_000
+
+    def _schedule_ws_reconnect(self) -> None:
+        if not self._should_start_ws():
+            return
+        now_ms = int(time.time() * 1000)
+        if self._last_ws_reconnect_ms and now_ms - self._last_ws_reconnect_ms < 5_000:
+            return
+        self._last_ws_reconnect_ms = now_ms
+        threading.Thread(target=self._start_ws, daemon=True).start()
+
     def close(self) -> None:
+        if self._ws_app is not None:
+            try:
+                self._ws_app.close()
+            except Exception:
+                return None
         return None
 
 
