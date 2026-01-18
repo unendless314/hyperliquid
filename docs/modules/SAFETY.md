@@ -24,6 +24,8 @@
 - Drift is computed per symbol as absolute position difference.
 - Thresholds are evaluated per symbol (not a cross-symbol sum).
 - If a total drift metric is used later, symbols must not offset each other.
+- Reconciliation uses net position per symbol with normalized symbols (replace '-' with '_').
+- Local positions are derived from order_intents + order_results (filled_qty with side sign).
 
 ## Cadence
 - Startup reconciliation runs once at boot.
@@ -32,6 +34,8 @@
 ## Key Rules
 - Do not auto-increase exposure when fixing drift
 - Allow reduce-only during ARMED_SAFE if enabled
+- If exchange snapshot is stale, enter ARMED_SAFE with reason_code=SNAPSHOT_STALE.
+- If either side is missing a symbol present on the other side, enter HALT with reason_code=RECONCILE_CRITICAL.
 
 ## Safety Mode Visibility
 - Every transition into ARMED_SAFE or HALT must record:

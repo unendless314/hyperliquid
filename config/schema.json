@@ -247,6 +247,31 @@
           }
         }
       }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "warn_threshold": {
+          "type": "number",
+          "minimum": 0
+        },
+        "critical_threshold": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reconcile_interval_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "snapshot_max_stale_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "startup_policy": {
+          "type": "string"
+        }
+      }
     }
   }
 }
