@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import time
+from typing import List, Optional
 from dataclasses import dataclass
 
 from hyperliquid.common.logging import setup_logging
 from hyperliquid.common.metrics import MetricsEmitter
-from hyperliquid.common.models import CONTRACT_VERSION, assert_contract_version
+from hyperliquid.common.models import CONTRACT_VERSION, PositionDeltaEvent, assert_contract_version
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.service import ExecutionService
+from hyperliquid.ingest.coordinator import IngestCoordinator
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
@@ -138,20 +140,23 @@ class Orchestrator:
             ),
         }
 
-    @staticmethod
-    def _run_single_cycle(services: dict[str, object], conn, logger) -> None:
+    def _run_single_cycle(self, services: dict[str, object], conn, logger) -> None:
         ingest: IngestService = services["ingest"]  # type: ignore[assignment]
         pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
 
-        raw_event = RawPositionEvent(
-            symbol="BTCUSDT",
-            tx_hash="boot",
-            event_index=0,
-            prev_target_net_position=0.0,
-            next_target_net_position=0.01,
-            is_replay=0,
-        )
-        events = ingest.ingest_raw_events([raw_event], conn)
+        events = self._ingest_external_once(ingest, conn, logger)
+        if events is None:
+            raw_event = RawPositionEvent(
+                symbol="BTCUSDT",
+                tx_hash="boot",
+                event_index=0,
+                prev_target_net_position=0.0,
+                next_target_net_position=0.01,
+                is_replay=0,
+            )
+            events = ingest.ingest_raw_events([raw_event], conn)
+        if not events:
+            return
         results = pipeline.process_events(events)
         for result in results:
             logger.info(
@@ -161,6 +166,16 @@ class Orchestrator:
                     "status": result.status,
                 },
             )
+
+    def _ingest_external_once(
+        self, ingest: IngestService, conn, logger
+    ) -> Optional[List[PositionDeltaEvent]]:
+        ingest_config = self.settings.raw.get("ingest", {})
+        hyperliquid_cfg = ingest_config.get("hyperliquid", {})
+        if not hyperliquid_cfg.get("enabled", False):
+            return None
+        coordinator = IngestCoordinator.from_settings(self.settings, ingest, logger)
+        return coordinator.run_once(conn, mode=self.mode)
 
     def _run_loop(self, logger, metrics) -> None:
         logger.info("loop_start", extra={"interval_sec": self.loop_interval_sec})

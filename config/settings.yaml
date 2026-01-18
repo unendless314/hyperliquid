@@ -4,3 +4,30 @@ db_path: "data/hyperliquid.db"
 metrics_log_path: "logs/metrics.log"
 app_log_path: "logs/app.log"
 log_level: "INFO"
+ingest:
+  maintenance_skip_gap: false
+  backfill_window_ms: 600000
+  cursor_overlap_ms: 5000
+  hyperliquid:
+    enabled: false
+    mode: "stub"
+    target_wallet: ""
+    rest_url: "https://api.hyperliquid.xyz/info"
+    ws_url: ""
+    request_timeout_ms: 10000
+    rate_limit:
+      max_requests: 10
+      per_seconds: 1
+      cooldown_seconds: 5
+    retry:
+      max_attempts: 5
+      base_delay_ms: 250
+      max_delay_ms: 5000
+      jitter_ms: 150
+    stub_events:
+      - symbol: "BTCUSDT"
+        tx_hash: "stub-boot"
+        event_index: 0
+        prev_target_net_position: 0.0
+        next_target_net_position: 0.01
+        timestamp_ms: 0

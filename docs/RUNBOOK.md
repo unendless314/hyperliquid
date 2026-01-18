@@ -37,6 +37,16 @@ Checklist:
 - Fix root cause (storage, config mismatch, position mode)
 - Restart after manual approval
 
+Maintenance restart:
+- Use an explicit maintenance flag (config: ingest.maintenance_skip_gap=true) to skip gap enforcement on restart.
+- When enabled, cursor is set to now, safety_reason_code records the bypass, and the system starts in ARMED_SAFE.
+- Before promotion, manually verify:
+  - Target wallet position matches expected state.
+  - No unexpected pending intents exist.
+  - Recent fills align with the intended restart window.
+- Manually promote to ARMED_LIVE after verifying positions.
+- Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
+
 ### 3) Repeated Order Failures
 Checklist:
 - Inspect error_code and error_message in order_results

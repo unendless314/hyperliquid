@@ -11,12 +11,18 @@
 - Hyperliquid user fills (WS + REST)
 - settings: cursor_mode, backfill_window, cursor_overlap_ms, replay_policy
 
+## Configuration Notes
+- ingest.backfill_window_ms and ingest.cursor_overlap_ms control backfill gap handling.
+- ingest.hyperliquid.* configures the adapter (enabled, mode, endpoints, rate limit, retry).
+- Stub events can be injected via ingest.hyperliquid.stub_events for local runs without live APIs.
+
 ## Outputs
 - PositionDeltaEvent to Decision queue
 - Updated cursor in Storage
 
 ## Key Rules
 - If gap > backfill_window: enter HALT
+- In HALT, stop ingesting and do not advance cursor until manual action clears the gap
 - Cursor moves only after event is persisted
 - Backfill uses overlap window; rely on dedup
 - Poison messages are isolated and skipped
@@ -30,3 +36,11 @@
 - WS reconnect with backoff
 - Backfill failure -> alert + ARMED_SAFE or HALT depending on severity
 - Parsing failure -> isolate and continue
+
+## Maintenance Restart
+- For planned downtime, use an explicit maintenance flag (config: ingest.maintenance_skip_gap=true) to skip gap enforcement on restart.
+- When maintenance skip is used:
+  - Set cursor to now, log a reason code, and start in ARMED_SAFE.
+  - Manual promotion to ARMED_LIVE is required.
+- This flow transfers gap reconciliation risk to the operator and does not guarantee backfill consistency.
+- Maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED); other HALT reasons must not be bypassed.

@@ -42,18 +42,18 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Common models reflect CONTRACTS and enforce version compatibility at startup
 
 ## Epic 1: Ingest pipeline (market/leader events)
-- [~] Story 1.1: Ingest service skeleton
+- [x] Story 1.1: Ingest service skeleton
   - [x] Task: Implement ingest service interface in src/hyperliquid/ingest/service.py
   - [x] Task: Define ingest event models in src/hyperliquid/common/models.py
   - [x] Task: Add raw ingest stub with dedup + cursor update
-  - [~] Task: Connect raw ingest to external adapters (WS/REST)
+  - [x] Task: Connect raw ingest to external adapters (WS/REST)
   - Acceptance: Ingest can be instantiated and emit mock events using models from Story 0.5
   - Note: Initial pipeline runs in event-driven mode; raw ingest wiring is deferred until external adapters land.
 
-- [ ] Story 1.2: External integration hooks
-  - [ ] Task: Add integration adapter stubs based on docs/INTEGRATIONS.md
-  - [ ] Task: Add rate limit + retry policy placeholders
-  - [ ] Task: Add contract version assertion on ingest output
+- [x] Story 1.2: External integration hooks
+  - [x] Task: Add integration adapter stubs based on docs/INTEGRATIONS.md
+  - [x] Task: Add rate limit + retry policy placeholders
+  - [x] Task: Add contract version assertion on ingest output
   - Acceptance: Adapters can be wired without hitting live APIs
 
 ## Epic 2: Decision engine
