@@ -14,6 +14,12 @@
 - Safety mode transitions
 - Alerts
 
+## Reconciliation Result (MVP)
+- compute drift per symbol and return a reconciliation result with:
+  - mode (ARMED_LIVE/ARMED_SAFE/HALT)
+  - reason_code and reason_message
+  - max drift and per-symbol drifts
+
 ## Drift Calculation
 - Drift is computed per symbol as absolute position difference.
 - Thresholds are evaluated per symbol (not a cross-symbol sum).
@@ -36,7 +42,7 @@
 - Alerts must include the reason code and timestamp.
 
 ## Reason Codes (MVP)
-- GAP_EXCEEDED: gap larger than backfill_window
+- BACKFILL_WINDOW_EXCEEDED: gap larger than backfill_window
 - SNAPSHOT_STALE: snapshot age exceeds snapshot_max_stale_ms
 - RECONCILE_CRITICAL: drift exceeds critical_threshold
 - POSITION_MODE_INVALID: exchange is not in one-way mode
@@ -45,3 +51,4 @@
 - CONFIG_HASH_CHANGED: config_hash changed but allowed by operator policy
 - CONTRACT_VERSION_MISMATCH: contract version differs from recorded value
 - SCHEMA_VERSION_MISMATCH: DB schema version differs from expected value
+- EXECUTION_ADAPTER_NOT_IMPLEMENTED: execution adapter not wired in live mode

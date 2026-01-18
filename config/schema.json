@@ -165,6 +165,82 @@
           }
         }
       }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["stub", "live"]
+            },
+            "base_url": {
+              "type": "string"
+            },
+            "api_key": {
+              "type": "string"
+            },
+            "api_secret": {
+              "type": "string"
+            },
+            "request_timeout_ms": {
+              "type": "integer",
+              "minimum": 1000
+            },
+            "recv_window_ms": {
+              "type": "integer",
+              "minimum": 500
+            },
+            "rate_limit": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "max_requests": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "per_seconds": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "cooldown_seconds": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "retry": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "max_attempts": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "base_delay_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_delay_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "jitter_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -11,6 +11,9 @@
 - OrderIntent
 - settings: tif_seconds, order_poll_interval_sec, market_fallback_enabled
 
+## Configuration Notes
+- execution.binance.* configures the exchange adapter (enabled, mode, endpoints, rate limit, retry).
+
 ## Outputs
 - OrderResult
 - Updates to Storage (orders, fills, status)

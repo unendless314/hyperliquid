@@ -10,6 +10,11 @@ from hyperliquid.common.models import CONTRACT_VERSION, PositionDeltaEvent, asse
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.service import DecisionService
+from hyperliquid.execution.adapters.binance import (
+    AdapterNotImplementedError,
+    BinanceExecutionAdapter,
+    BinanceExecutionConfig,
+)
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.ingest.coordinator import IngestCoordinator
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
@@ -40,13 +45,22 @@ class Orchestrator:
             self._handle_config_hash(conn, config_hash, logger)
             self._record_config(conn, config_hash)
             self._ensure_bootstrap_state(conn)
-            services = self._initialize_services(conn)
+            services = self._initialize_services(conn, logger)
             if self.emit_boot_event:
                 self._run_single_cycle(services, conn, logger)
             logger.info("boot_complete", extra={"mode": self.mode})
             if self.run_loop:
                 self._run_loop(logger, metrics)
             metrics.emit("cursor_lag_ms", 0)
+        except AdapterNotImplementedError as exc:
+            if conn is not None:
+                set_safety_state(
+                    conn,
+                    mode="HALT",
+                    reason_code="EXECUTION_ADAPTER_NOT_IMPLEMENTED",
+                    reason_message=str(exc),
+                )
+            raise
         except RuntimeError as exc:
             if str(exc) == "SCHEMA_VERSION_MISMATCH" and conn is not None:
                 set_safety_state(
@@ -115,15 +129,22 @@ class Orchestrator:
         if get_system_state(conn, "safety_changed_at_ms") is None:
             set_system_state(conn, "safety_changed_at_ms", str(now_ms))
 
-    @staticmethod
-    def _initialize_services(conn) -> dict[str, object]:
+    def _initialize_services(self, conn, logger) -> dict[str, object]:
         def safety_mode_provider() -> str:
             return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
 
         safety_service = SafetyService(safety_mode_provider=safety_mode_provider)
+        execution_adapter = None
+        binance_cfg = self.settings.raw.get("execution", {}).get("binance", {})
+        if self.mode == "live" and binance_cfg.get("enabled", False):
+            execution_adapter = BinanceExecutionAdapter(
+                BinanceExecutionConfig.from_settings(self.settings.raw),
+                logger=logger,
+            )
         execution_service = ExecutionService(
             pre_hooks=[safety_service.pre_execution_check],
             post_hooks=[safety_service.post_execution_check],
+            adapter=execution_adapter,
         )
         decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
         ingest_service = IngestService()

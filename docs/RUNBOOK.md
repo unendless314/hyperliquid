@@ -32,7 +32,7 @@ Checklist:
 
 ### 2) Entered HALT
 Checklist:
-- Identify reason code (e.g., GAP_EXCEEDED, STORAGE_UNAVAILABLE)
+- Identify reason code (e.g., BACKFILL_WINDOW_EXCEEDED, STORAGE_UNAVAILABLE, EXECUTION_ADAPTER_NOT_IMPLEMENTED)
 - Stop trading immediately (switch to HALT / stop the process)
 - Fix root cause (storage, config mismatch, position mode)
 - Restart after manual approval

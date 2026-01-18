@@ -77,14 +77,14 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject
 
 - [ ] Story 3.2: Exchange adapter skeleton
-  - [ ] Task: Implement adapter stubs per docs/INTEGRATIONS.md
-  - [ ] Task: Add idempotency + dedup placeholders
+  - [x] Task: Implement adapter stubs per docs/INTEGRATIONS.md
+  - [~] Task: Add idempotency + dedup placeholders
   - Acceptance: Execution flow can be simulated end-to-end
 
 ## Epic 4: Safety + reconciliation
 - [~] Story 4.1: Safety service skeleton
   - [x] Task: Implement safety service interface in src/hyperliquid/safety/service.py
-  - [ ] Task: Define reconciliation models and checks
+  - [~] Task: Define reconciliation models and checks
   - Acceptance: Safety service can validate a mock execution state
 
 ## Epic 5: Persistence + audit

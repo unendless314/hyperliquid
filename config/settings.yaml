@@ -31,3 +31,21 @@ ingest:
         prev_target_net_position: 0.0
         next_target_net_position: 0.01
         timestamp_ms: 0
+execution:
+  binance:
+    enabled: false
+    mode: "stub"
+    base_url: "https://fapi.binance.com"
+    api_key: ""
+    api_secret: ""
+    request_timeout_ms: 10000
+    recv_window_ms: 5000
+    rate_limit:
+      max_requests: 10
+      per_seconds: 1
+      cooldown_seconds: 5
+    retry:
+      max_attempts: 5
+      base_delay_ms: 250
+      max_delay_ms: 5000
+      jitter_ms: 150

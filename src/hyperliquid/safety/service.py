@@ -4,6 +4,12 @@ from dataclasses import dataclass
 from typing import Callable
 
 from hyperliquid.common.models import OrderIntent
+from hyperliquid.safety.reconcile import (
+    DriftReport,
+    ReconciliationResult,
+    compute_drift,
+    evaluate_drift,
+)
 
 
 SafetyModeProvider = Callable[[], str]
@@ -23,3 +29,16 @@ class SafetyService:
     def post_execution_check(self, intent: OrderIntent) -> None:
         _ = intent
         return None
+
+    def reconcile_positions(
+        self,
+        *,
+        db_positions: dict[str, float],
+        exchange_positions: dict[str, float],
+        warn_threshold: float,
+        critical_threshold: float,
+    ) -> ReconciliationResult:
+        report: DriftReport = compute_drift(db_positions, exchange_positions)
+        return evaluate_drift(
+            report, warn_threshold=warn_threshold, critical_threshold=critical_threshold
+        )

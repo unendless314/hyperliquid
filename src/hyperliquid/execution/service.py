@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 from typing import Callable, List
 
 from hyperliquid.common.models import OrderIntent, OrderResult, assert_contract_version
+from hyperliquid.execution.adapters.binance import (
+    AdapterNotImplementedError,
+    BinanceExecutionAdapter,
+)
 
 
 PreExecutionHook = Callable[[OrderIntent], None]
@@ -14,6 +18,7 @@ PostExecutionHook = Callable[[OrderIntent, OrderResult], None]
 class ExecutionService:
     pre_hooks: List[PreExecutionHook] = field(default_factory=list)
     post_hooks: List[PostExecutionHook] = field(default_factory=list)
+    adapter: BinanceExecutionAdapter | None = None
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         assert_contract_version(intent.contract_version)
@@ -35,15 +40,31 @@ class ExecutionService:
             assert_contract_version(result.contract_version)
             return result
 
-        result = OrderResult(
-            correlation_id=intent.correlation_id,
-            exchange_order_id=None,
-            status="SUBMITTED",
-            filled_qty=0.0,
-            avg_price=None,
-            error_code=None,
-            error_message=None,
-        )
+        if self.adapter is not None:
+            try:
+                result = self.adapter.execute(intent)
+            except AdapterNotImplementedError:
+                raise
+            except Exception as exc:
+                result = OrderResult(
+                    correlation_id=intent.correlation_id,
+                    exchange_order_id=None,
+                    status="UNKNOWN",
+                    filled_qty=0.0,
+                    avg_price=None,
+                    error_code="EXECUTION_ERROR",
+                    error_message=str(exc),
+                )
+        else:
+            result = OrderResult(
+                correlation_id=intent.correlation_id,
+                exchange_order_id=None,
+                status="SUBMITTED",
+                filled_qty=0.0,
+                avg_price=None,
+                error_code=None,
+                error_message=None,
+            )
         for hook in self.post_hooks:
             hook(intent, result)
         assert_contract_version(result.contract_version)
