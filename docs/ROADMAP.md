@@ -54,7 +54,8 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add integration adapter stubs based on docs/INTEGRATIONS.md
   - [x] Task: Add rate limit + retry policy placeholders
   - [x] Task: Add contract version assertion on ingest output
-  - [~] Task: Wire REST backfill/live polling adapter for Hyperliquid
+  - [x] Task: Wire REST backfill/live polling adapter for Hyperliquid
+  - [x] Task: Wire WS streaming adapter with fallback + reconnect
   - Acceptance: Adapters can be wired without hitting live APIs
 
 ## Epic 2: Decision engine
@@ -105,9 +106,37 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable
 
-## Handoff Notes (2026/01/17)
-- Pipeline is event-driven; raw ingest adapters are still deferred (see Epic 1.2).
-- Dedup + cursor updates are atomic; cursor only advances when event ordering is newer.
-- Decision replay policy defaults to close-only; tests added for replay/flip/pipeline/persistence.
-- Boot cycle emits a mock raw event; disable with --no-emit-boot-event if needed.
-- DB persistence uses order_intents immutable (INSERT OR IGNORE) and order_results mutable (ON CONFLICT UPDATE).
+## Handoff Notes (2026/01/18)
+
+  ### Current Status
+
+  - Ingest: REST backfill + live polling wired; WS streaming with fallback/reconnect & buffer limits added.
+  - Execution: Binance adapter stub wired; fail‑fast if live mode not implemented; dry-run/backfill-only never submit.
+  - Safety: Minimal reconciliation models/hooks added.
+  - Maintenance skip: gap-only bypass with explicit flag and safety reason codes.
+  - Tests: Added unit tests for maintenance skip, symbol map filtering, and live polling path.
+
+  ### Key Files
+
+  - Ingest adapter: src/hyperliquid/ingest/adapters/hyperliquid.py
+  - Ingest coordinator: src/hyperliquid/ingest/coordinator.py
+  - Execution adapter stub: src/hyperliquid/execution/adapters/binance.py
+  - Execution service wiring: src/hyperliquid/execution/service.py
+  - Safety reconcile: src/hyperliquid/safety/reconcile.py
+  - Config/schema: config/schema.json, config/settings.yaml
+  - Docs: docs/modules/INGEST.md, docs/modules/EXECUTION.md, docs/modules/SAFETY.md, docs/RUNBOOK.md, docs/ROADMAP.md
+
+  ### Remaining High‑Priority Work
+
+  1. Execution idempotency placeholders / clientOrderId persistence (per docs/modules/EXECUTION.md)
+  2. Safety reconciliation implementation using exchange positions
+  3. Binance adapter live implementation (REST signing, retries, rate limit handling)
+  4. Audit log entries for key state changes
+  5. Integration tests (esp. WS/backfill + execution error paths)
+
+  ### Notes / Risks
+
+  - WS dependency: requires websocket-client in requirements.txt.
+  - Symbol map is strict: unmapped/spot @ coins are skipped by design.
+  - live mode uses WS when healthy; falls back to REST if stale >30s or WS unavailable.
+  - Execution adapter in live mode triggers HALT with reason EXECUTION_ADAPTER_NOT_IMPLEMENTED.

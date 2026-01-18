@@ -58,6 +58,7 @@ class DecisionService:
             correlation_id=correlation_id(
                 event.tx_hash, event.event_index, event.symbol, suffix=suffix
             ),
+            client_order_id=None,
             symbol=event.symbol,
             side=side,
             order_type="MARKET",

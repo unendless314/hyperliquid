@@ -48,6 +48,10 @@ def correlation_id(
     return base
 
 
+def normalize_symbol(symbol: str) -> str:
+    return symbol.replace("-", "_")
+
+
 @dataclass
 class PositionDeltaEvent:
     symbol: str
@@ -67,6 +71,7 @@ class PositionDeltaEvent:
 @dataclass
 class OrderIntent:
     correlation_id: str
+    client_order_id: Optional[str]
     symbol: str
     side: str
     order_type: str

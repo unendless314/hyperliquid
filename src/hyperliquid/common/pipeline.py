@@ -21,9 +21,13 @@ class Pipeline:
             intents = self.decision.decide(event)
             for intent in intents:
                 if self.persistence is not None:
-                    record_intent = getattr(self.persistence, "record_intent", None)
-                    if callable(record_intent):
-                        record_intent(intent)
+                    ensure_intent = getattr(self.persistence, "ensure_intent", None)
+                    if callable(ensure_intent):
+                        intent = ensure_intent(intent)
+                    else:
+                        record_intent = getattr(self.persistence, "record_intent", None)
+                        if callable(record_intent):
+                            record_intent(intent)
                 results.append(self.execution.execute(intent))
                 if self.persistence is not None:
                     record_result = getattr(self.persistence, "record_result", None)
