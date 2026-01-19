@@ -13,6 +13,8 @@ def _build_live_config() -> binance.BinanceExecutionConfig:
         api_secret="secret",
         request_timeout_ms=1000,
         recv_window_ms=5000,
+        exchange_info_enabled=False,
+        exchange_info_ttl_sec=300,
         rate_limit=binance.RateLimitPolicy(
             max_requests=0,
             per_seconds=1,
@@ -91,7 +93,7 @@ def test_fetch_positions_uses_max_update_time() -> None:
     adapter._client.fetch_positions = lambda: payload
     positions, timestamp_ms = adapter.fetch_positions()
     assert timestamp_ms == 2000
-    assert positions["BTC_USDT"] == 0.75
+    assert positions["BTCUSDT"] == 0.75
     assert positions["ETHUSDT"] == -0.1
 
 
@@ -102,3 +104,180 @@ def test_fetch_positions_missing_update_time_returns_zero_timestamp() -> None:
     positions, timestamp_ms = adapter.fetch_positions()
     assert positions["BTCUSDT"] == 0.1
     assert timestamp_ms == 0
+
+
+def test_parse_exchange_info_filters() -> None:
+    payload = {
+        "symbols": [
+            {
+                "symbol": "BTCUSDT",
+                "filters": [
+                    {"filterType": "LOT_SIZE", "minQty": "0.001", "stepSize": "0.001"},
+                    {"filterType": "MIN_NOTIONAL", "notional": "5"},
+                    {"filterType": "PRICE_FILTER", "tickSize": "0.1"},
+                ],
+            }
+        ]
+    }
+    parsed = binance._parse_exchange_info(payload)
+    assert "BTCUSDT" in parsed
+    filters = parsed["BTCUSDT"]
+    assert str(filters.min_qty) == "0.001"
+    assert str(filters.step_size) == "0.001"
+    assert str(filters.min_notional) == "5"
+    assert str(filters.tick_size) == "0.1"
+
+
+def test_validate_intent_filters_min_qty() -> None:
+    filters = {
+        "BTCUSDT": binance.BinanceSymbolFilters(
+            min_qty=binance._decimal_from("0.01"),
+            step_size=binance._decimal_from("0.01"),
+            min_notional=binance._decimal_from("5"),
+            tick_size=binance._decimal_from("0.1"),
+        )
+    }
+    intent = OrderIntent(
+        correlation_id="hl-abc-30-BTCUSDT",
+        client_order_id="hl-abc-30-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="LIMIT",
+        qty=0.001,
+        price=100.0,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    try:
+        binance._validate_intent_filters(intent, filters)
+        assert False, "expected min qty violation"
+    except ValueError as exc:
+        assert "qty_below_min_qty" in str(exc)
+
+
+def test_validate_market_notional_uses_safety_factor() -> None:
+    intent = OrderIntent(
+        correlation_id="hl-abc-31-BTCUSDT",
+        client_order_id="hl-abc-31-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="MARKET",
+        qty=0.0001,
+        price=None,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    try:
+        binance._validate_market_notional(
+            intent=intent,
+            min_notional=binance._decimal_from("5"),
+            mark_price=binance._decimal_from("50000"),
+            safety_factor=binance._decimal_from("1.02"),
+        )
+        assert False, "expected min notional violation"
+    except ValueError as exc:
+        assert "min_notional_violation" in str(exc)
+
+
+def test_execute_market_notional_rejected() -> None:
+    config = binance.BinanceExecutionConfig(
+        enabled=True,
+        mode="live",
+        base_url="https://example.test",
+        api_key="key",
+        api_secret="secret",
+        request_timeout_ms=1000,
+        recv_window_ms=5000,
+        exchange_info_enabled=True,
+        exchange_info_ttl_sec=300,
+        rate_limit=binance.RateLimitPolicy(
+            max_requests=0,
+            per_seconds=1,
+            cooldown_seconds=0,
+        ),
+        retry=binance.RetryPolicy(
+            max_attempts=1,
+            base_delay_ms=0,
+            max_delay_ms=0,
+            jitter_ms=0,
+        ),
+    )
+    adapter = binance.BinanceExecutionAdapter(config)
+    adapter._client.fetch_exchange_info = lambda: {
+        "symbols": [
+            {
+                "symbol": "BTCUSDT",
+                "filters": [
+                    {"filterType": "LOT_SIZE", "minQty": "0.001", "stepSize": "0.001"},
+                    {"filterType": "MIN_NOTIONAL", "notional": "5"},
+                    {"filterType": "PRICE_FILTER", "tickSize": "0.1"},
+                ],
+            }
+        ]
+    }
+    adapter._client.fetch_mark_price = lambda symbol: binance._decimal_from("50000")
+    adapter._client.place_order = lambda intent: {"status": "NEW"}
+    intent = OrderIntent(
+        correlation_id="hl-abc-32-BTCUSDT",
+        client_order_id="hl-abc-32-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="MARKET",
+        qty=0.00005,
+        price=None,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    result = adapter.execute(intent)
+    assert result.status == "REJECTED"
+    assert result.error_code == "FILTER_REJECTED"
+
+
+def test_execute_exchange_info_missing_filters_rejected() -> None:
+    config = binance.BinanceExecutionConfig(
+        enabled=True,
+        mode="live",
+        base_url="https://example.test",
+        api_key="key",
+        api_secret="secret",
+        request_timeout_ms=1000,
+        recv_window_ms=5000,
+        exchange_info_enabled=True,
+        exchange_info_ttl_sec=300,
+        rate_limit=binance.RateLimitPolicy(
+            max_requests=0,
+            per_seconds=1,
+            cooldown_seconds=0,
+        ),
+        retry=binance.RetryPolicy(
+            max_attempts=1,
+            base_delay_ms=0,
+            max_delay_ms=0,
+            jitter_ms=0,
+        ),
+    )
+    adapter = binance.BinanceExecutionAdapter(config)
+    adapter._client.fetch_exchange_info = lambda: {}
+    adapter._client.place_order = lambda intent: {"status": "NEW"}
+    intent = OrderIntent(
+        correlation_id="hl-abc-33-BTCUSDT",
+        client_order_id="hl-abc-33-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="LIMIT",
+        qty=0.01,
+        price=100.0,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    result = adapter.execute(intent)
+    assert result.status == "REJECTED"
+    assert result.error_code == "FILTER_REJECTED"

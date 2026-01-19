@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from hyperliquid.common.idempotency import sanitize_client_order_id
@@ -18,7 +19,7 @@ from hyperliquid.common.models import (
     OrderIntent,
     OrderResult,
     assert_contract_version,
-    normalize_symbol,
+    normalize_execution_symbol,
 )
 
 
@@ -98,6 +99,8 @@ class BinanceExecutionConfig:
     api_secret: str
     request_timeout_ms: int
     recv_window_ms: int
+    exchange_info_enabled: bool
+    exchange_info_ttl_sec: int
     rate_limit: RateLimitPolicy
     retry: RetryPolicy
 
@@ -115,6 +118,8 @@ class BinanceExecutionConfig:
             api_secret=str(binance.get("api_secret", "")),
             request_timeout_ms=int(binance.get("request_timeout_ms", 10_000)),
             recv_window_ms=int(binance.get("recv_window_ms", 5_000)),
+            exchange_info_enabled=bool(binance.get("exchange_info_enabled", True)),
+            exchange_info_ttl_sec=int(binance.get("exchange_info_ttl_sec", 300)),
             rate_limit=RateLimitPolicy(
                 max_requests=int(rate_limit.get("max_requests", 0)),
                 per_seconds=int(rate_limit.get("per_seconds", 1)),
@@ -136,7 +141,10 @@ class BinanceExecutionAdapter:
         self._config = config
         self._logger = logger or logging.getLogger("hyperliquid")
         self._rate_limiter = RateLimiter(config.rate_limit)
+        self._meta_rate_limiter = RateLimiter(config.rate_limit)
         self._client = BinanceRestClient(config, self._logger)
+        self._filters: dict[str, BinanceSymbolFilters] = {}
+        self._filters_last_fetch_ms: int = 0
 
     @property
     def config(self) -> BinanceExecutionConfig:
@@ -180,6 +188,18 @@ class BinanceExecutionAdapter:
             )
         try:
             _validate_intent(intent)
+            try:
+                filters = self._ensure_filters()
+                if filters:
+                    _validate_intent_filters(intent, filters)
+                    if intent.order_type == "MARKET":
+                        self._validate_market_notional(intent, filters)
+            except ValueError as exc:
+                if _is_filter_error(exc):
+                    return self._result_from_error(
+                        intent, "REJECTED", "FILTER_REJECTED", str(exc)
+                    )
+                raise
             response = self._client.place_order(intent)
             return _result_from_exchange(intent, response)
         except BinanceRateLimitError:
@@ -200,6 +220,41 @@ class BinanceExecutionAdapter:
                         intent, "UNKNOWN", "QUERY_ERROR", str(query_exc)
                     )
             return _map_error_to_result(intent, exc)
+
+    def _ensure_filters(self) -> dict[str, BinanceSymbolFilters] | None:
+        if not self._config.exchange_info_enabled:
+            return None
+        now_ms = int(time.time() * 1000)
+        ttl_ms = max(self._config.exchange_info_ttl_sec, 0) * 1000
+        if self._filters and ttl_ms > 0 and now_ms - self._filters_last_fetch_ms < ttl_ms:
+            return self._filters
+        if not self._meta_rate_limiter.allow():
+            raise BinanceRateLimitError("Rate limit hit")
+        payload = self._client.fetch_exchange_info()
+        self._filters = _parse_exchange_info(payload)
+        self._filters_last_fetch_ms = now_ms
+        if not self._filters:
+            raise ValueError("exchange_info_missing_filters")
+        return self._filters
+
+    def _validate_market_notional(
+        self, intent: OrderIntent, filters: dict[str, BinanceSymbolFilters]
+    ) -> None:
+        symbol_key = _normalize_binance_symbol(intent.symbol)
+        symbol_filters = filters.get(symbol_key)
+        if symbol_filters is None:
+            raise ValueError(f"missing_symbol_filters:{symbol_key}")
+        if symbol_filters.min_notional <= 0:
+            return
+        if not self._meta_rate_limiter.allow():
+            raise BinanceRateLimitError("Rate limit hit")
+        mark_price = self._client.fetch_mark_price(symbol_key)
+        _validate_market_notional(
+            intent=intent,
+            min_notional=symbol_filters.min_notional,
+            mark_price=mark_price,
+            safety_factor=Decimal("1.02"),
+        )
 
     def fetch_positions(self) -> tuple[dict[str, float], int]:
         if not self._config.enabled:
@@ -225,7 +280,7 @@ class BinanceExecutionAdapter:
                 latest_update_ms = update_ms
             if position_amt == 0.0:
                 continue
-            key = normalize_symbol(symbol)
+            key = _normalize_binance_symbol(symbol)
             positions[key] = positions.get(key, 0.0) + position_amt
         if latest_update_ms is None:
             latest_update_ms = 0
@@ -287,6 +342,21 @@ class BinanceRestClient:
             "origClientOrderId": sanitize_client_order_id(intent.client_order_id),
         }
         return self._request("DELETE", "/fapi/v1/order", params=params, signed=True)
+
+    def fetch_exchange_info(self) -> dict:
+        payload = self._request("GET", "/fapi/v1/exchangeInfo", params={}, signed=False)
+        if isinstance(payload, dict):
+            return payload
+        return {}
+
+    def fetch_mark_price(self, symbol: str) -> Decimal:
+        params = {"symbol": symbol}
+        payload = self._request(
+            "GET", "/fapi/v1/premiumIndex", params=params, signed=False
+        )
+        if not isinstance(payload, dict):
+            raise ValueError("premium_index_invalid_payload")
+        return _decimal_from(payload.get("markPrice"))
 
     def fetch_positions(self) -> list[dict]:
         payload = self._request("GET", "/fapi/v2/positionRisk", params={}, signed=True)
@@ -440,7 +510,109 @@ def _build_order_params(intent: OrderIntent) -> dict:
 
 
 def _normalize_binance_symbol(symbol: str) -> str:
-    return symbol.replace("-", "").replace("_", "")
+    return normalize_execution_symbol(symbol)
+
+
+@dataclass(frozen=True)
+class BinanceSymbolFilters:
+    min_qty: Decimal
+    step_size: Decimal
+    min_notional: Decimal
+    tick_size: Decimal
+
+
+def _parse_exchange_info(payload: dict) -> dict[str, BinanceSymbolFilters]:
+    symbols = payload.get("symbols", []) if isinstance(payload, dict) else []
+    parsed: dict[str, BinanceSymbolFilters] = {}
+    for entry in symbols:
+        symbol = str(entry.get("symbol", ""))
+        if not symbol:
+            continue
+        filters = entry.get("filters", []) or []
+        min_qty = Decimal("0")
+        step_size = Decimal("0")
+        min_notional = Decimal("0")
+        tick_size = Decimal("0")
+        for f in filters:
+            ftype = f.get("filterType")
+            if ftype == "LOT_SIZE":
+                min_qty = _decimal_from(f.get("minQty"))
+                step_size = _decimal_from(f.get("stepSize"))
+            elif ftype == "MIN_NOTIONAL":
+                min_notional = _decimal_from(f.get("notional", f.get("minNotional")))
+            elif ftype == "PRICE_FILTER":
+                tick_size = _decimal_from(f.get("tickSize"))
+        key = _normalize_binance_symbol(symbol)
+        parsed[key] = BinanceSymbolFilters(
+            min_qty=min_qty,
+            step_size=step_size,
+            min_notional=min_notional,
+            tick_size=tick_size,
+        )
+    return parsed
+
+
+def _decimal_from(value) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def _is_multiple(value: Decimal, step: Decimal) -> bool:
+    if step <= 0:
+        return True
+    return (value % step) == 0
+
+
+def _validate_intent_filters(
+    intent: OrderIntent, filters: dict[str, BinanceSymbolFilters]
+) -> None:
+    symbol_key = _normalize_binance_symbol(intent.symbol)
+    symbol_filters = filters.get(symbol_key)
+    if symbol_filters is None:
+        raise ValueError(f"missing_symbol_filters:{symbol_key}")
+    qty = _decimal_from(intent.qty)
+    if symbol_filters.min_qty > 0 and qty < symbol_filters.min_qty:
+        raise ValueError("qty_below_min_qty")
+    if not _is_multiple(qty, symbol_filters.step_size):
+        raise ValueError("qty_step_size_violation")
+    if intent.price is None:
+        return
+    price = _decimal_from(intent.price)
+    if not _is_multiple(price, symbol_filters.tick_size):
+        raise ValueError("price_tick_size_violation")
+    if symbol_filters.min_notional > 0 and (price * qty) < symbol_filters.min_notional:
+        raise ValueError("min_notional_violation")
+
+
+def _validate_market_notional(
+    *, intent: OrderIntent, min_notional: Decimal, mark_price: Decimal, safety_factor: Decimal
+) -> None:
+    if min_notional <= 0:
+        return
+    qty = _decimal_from(intent.qty)
+    if qty <= 0:
+        raise ValueError("qty_below_min_qty")
+    if mark_price <= 0:
+        raise ValueError("mark_price_unavailable")
+    threshold = min_notional * safety_factor
+    if (qty * mark_price) < threshold:
+        raise ValueError("min_notional_violation")
+
+
+def _is_filter_error(exc: ValueError) -> bool:
+    message = str(exc)
+    return message in {
+        "exchange_info_missing_filters",
+        "qty_below_min_qty",
+        "qty_step_size_violation",
+        "price_tick_size_violation",
+        "min_notional_violation",
+        "mark_price_unavailable",
+    } or message.startswith("missing_symbol_filters:")
 
 
 def _format_quantity(value: float) -> str:

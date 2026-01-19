@@ -204,6 +204,13 @@
               "type": "integer",
               "minimum": 500
             },
+            "exchange_info_enabled": {
+              "type": "boolean"
+            },
+            "exchange_info_ttl_sec": {
+              "type": "integer",
+              "minimum": 0
+            },
             "rate_limit": {
               "type": "object",
               "additionalProperties": false,

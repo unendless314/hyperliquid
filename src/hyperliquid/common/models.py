@@ -52,6 +52,10 @@ def normalize_symbol(symbol: str) -> str:
     return symbol.replace("-", "_")
 
 
+def normalize_execution_symbol(symbol: str) -> str:
+    return symbol.replace("-", "").replace("_", "")
+
+
 @dataclass
 class PositionDeltaEvent:
     symbol: str

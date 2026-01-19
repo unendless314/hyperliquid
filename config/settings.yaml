@@ -42,6 +42,8 @@ execution:
     api_secret: ""
     request_timeout_ms: 10000
     recv_window_ms: 5000
+    exchange_info_enabled: true
+    exchange_info_ttl_sec: 300
     rate_limit:
       max_requests: 10
       per_seconds: 1
