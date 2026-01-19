@@ -6,7 +6,11 @@ from dataclasses import dataclass
 
 from hyperliquid.common.logging import setup_logging
 from hyperliquid.common.metrics import MetricsEmitter
-from hyperliquid.common.models import CONTRACT_VERSION, PositionDeltaEvent, assert_contract_version
+from hyperliquid.common.models import (
+    CONTRACT_VERSION,
+    PositionDeltaEvent,
+    assert_contract_version,
+)
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.service import DecisionService
@@ -18,9 +22,11 @@ from hyperliquid.execution.adapters.binance import (
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.ingest.coordinator import IngestCoordinator
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
+from hyperliquid.safety.reconcile import PositionSnapshot
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
-from hyperliquid.storage.safety import set_safety_state
+from hyperliquid.storage.positions import load_local_positions_from_orders
+from hyperliquid.storage.safety import load_safety_state, set_safety_state
 from hyperliquid.storage.persistence import DbPersistence
 
 
@@ -46,11 +52,15 @@ class Orchestrator:
             self._record_config(conn, config_hash)
             self._ensure_bootstrap_state(conn)
             services = self._initialize_services(conn, logger)
+            self._run_startup_reconcile(services, conn, logger, metrics)
+            if get_system_state(conn, "safety_mode") == "HALT":
+                logger.warning("boot_halted")
+                return
             if self.emit_boot_event:
                 self._run_single_cycle(services, conn, logger)
             logger.info("boot_complete", extra={"mode": self.mode})
             if self.run_loop:
-                self._run_loop(logger, metrics)
+                self._run_loop(services, conn, logger, metrics)
             metrics.emit("cursor_lag_ms", 0)
         except AdapterNotImplementedError as exc:
             if conn is not None:
@@ -163,6 +173,117 @@ class Orchestrator:
             ),
         }
 
+    def _run_startup_reconcile(self, services: dict[str, object], conn, logger, metrics) -> None:
+        safety_config = self.settings.raw.get("safety", {})
+        startup_policy = str(safety_config.get("startup_policy", "manual")).lower()
+        allow_auto_promote = startup_policy in ("auto", "auto_promote", "auto-promote")
+        self._run_reconcile(
+            services,
+            conn,
+            logger,
+            metrics,
+            allow_auto_promote=allow_auto_promote,
+            context="startup",
+        )
+
+    def _run_reconcile(
+        self,
+        services: dict[str, object],
+        conn,
+        logger,
+        metrics,
+        *,
+        allow_auto_promote: bool,
+        context: str,
+    ) -> None:
+        safety: SafetyService = services["safety"]  # type: ignore[assignment]
+        execution: ExecutionService = services["execution"]  # type: ignore[assignment]
+
+        adapter = execution.adapter
+        if adapter is None:
+            logger.info("reconcile_skipped", extra={"context": context, "reason": "no_adapter"})
+            return
+
+        try:
+            exchange_positions, exchange_ts_ms = adapter.fetch_positions()
+        except AdapterNotImplementedError as exc:
+            logger.info(
+                "reconcile_skipped",
+                extra={
+                    "context": context,
+                    "reason": "adapter_not_implemented",
+                    "error": str(exc),
+                },
+            )
+            return
+        except Exception as exc:
+            logger.warning(
+                "reconcile_failed",
+                extra={"context": context, "error": str(exc)},
+            )
+            if context == "startup":
+                set_safety_state(
+                    conn,
+                    mode="HALT",
+                    reason_code="RECONCILE_FAILED",
+                    reason_message="Startup reconciliation failed",
+                )
+            metrics.emit(
+                "reconcile_failed",
+                1,
+                tags={"context": context},
+            )
+            return
+
+        now_ms = int(time.time() * 1000)
+        local_positions = load_local_positions_from_orders(conn)
+        local_snapshot = PositionSnapshot(
+            source="local",
+            positions=local_positions,
+            timestamp_ms=now_ms,
+        )
+        exchange_snapshot = PositionSnapshot(
+            source="exchange",
+            positions=exchange_positions,
+            timestamp_ms=exchange_ts_ms,
+        )
+
+        safety_config = self.settings.raw.get("safety", {})
+        warn_threshold = float(safety_config.get("warn_threshold", 0.0))
+        critical_threshold = float(safety_config.get("critical_threshold", 0.0))
+        snapshot_max_stale_ms = int(safety_config.get("snapshot_max_stale_ms", 0))
+        current_state = load_safety_state(conn)
+
+        result = safety.reconcile_snapshots(
+            local_snapshot=local_snapshot,
+            exchange_snapshot=exchange_snapshot,
+            warn_threshold=warn_threshold,
+            critical_threshold=critical_threshold,
+            snapshot_max_stale_ms=snapshot_max_stale_ms,
+            current_state=current_state,
+            allow_auto_promote=allow_auto_promote,
+        )
+        set_safety_state(
+            conn,
+            mode=result.mode,
+            reason_code=result.reason_code,
+            reason_message=result.reason_message,
+        )
+        logger.info(
+            "reconcile_result",
+            extra={
+                "context": context,
+                "mode": result.mode,
+                "reason_code": result.reason_code,
+                "max_drift": result.report.max_drift,
+            },
+        )
+        metrics.emit(
+            "reconcile_max_drift",
+            result.report.max_drift,
+            tags={"context": context, "mode": result.mode, "reason": result.reason_code},
+        )
+
     def _run_single_cycle(self, services: dict[str, object], conn, logger) -> None:
         ingest: IngestService = services["ingest"]  # type: ignore[assignment]
         pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
@@ -200,9 +321,23 @@ class Orchestrator:
         coordinator = IngestCoordinator.from_settings(self.settings, ingest, logger)
         return coordinator.run_once(conn, mode=self.mode)
 
-    def _run_loop(self, logger, metrics) -> None:
+    def _run_loop(self, services: dict[str, object], conn, logger, metrics) -> None:
         logger.info("loop_start", extra={"interval_sec": self.loop_interval_sec})
+        safety_config = self.settings.raw.get("safety", {})
+        reconcile_interval_sec = int(safety_config.get("reconcile_interval_sec", 0))
+        next_reconcile_ms = int(time.time() * 1000)
         while True:
+            now_ms = int(time.time() * 1000)
+            if reconcile_interval_sec > 0 and now_ms >= next_reconcile_ms:
+                self._run_reconcile(
+                    services,
+                    conn,
+                    logger,
+                    metrics,
+                    allow_auto_promote=False,
+                    context="loop",
+                )
+                next_reconcile_ms = now_ms + reconcile_interval_sec * 1000
             metrics.emit("heartbeat", 1)
             logger.info("loop_tick")
             time.sleep(self.loop_interval_sec)

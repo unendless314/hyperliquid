@@ -4,6 +4,29 @@ from hyperliquid.common.models import OrderIntent
 from hyperliquid.execution.adapters import binance
 
 
+def _build_live_config() -> binance.BinanceExecutionConfig:
+    return binance.BinanceExecutionConfig(
+        enabled=True,
+        mode="live",
+        base_url="https://example.test",
+        api_key="key",
+        api_secret="secret",
+        request_timeout_ms=1000,
+        recv_window_ms=5000,
+        rate_limit=binance.RateLimitPolicy(
+            max_requests=0,
+            per_seconds=1,
+            cooldown_seconds=0,
+        ),
+        retry=binance.RetryPolicy(
+            max_attempts=1,
+            base_delay_ms=0,
+            max_delay_ms=0,
+            jitter_ms=0,
+        ),
+    )
+
+
 def test_map_exchange_status() -> None:
     assert binance._map_exchange_status("NEW") == "SUBMITTED"
     assert binance._map_exchange_status("PARTIALLY_FILLED") == "PARTIALLY_FILLED"
@@ -56,3 +79,26 @@ def test_map_error_to_result() -> None:
     result = binance._map_error_to_result(intent, server_error)
     assert result.status == "UNKNOWN"
     assert result.error_code == "EXCHANGE_ERROR"
+
+
+def test_fetch_positions_uses_max_update_time() -> None:
+    adapter = binance.BinanceExecutionAdapter(_build_live_config())
+    payload = [
+        {"symbol": "BTC-USDT", "positionAmt": "0.5", "updateTime": 1000},
+        {"symbol": "ETHUSDT", "positionAmt": "-0.1", "updateTime": 2000},
+        {"symbol": "BTC-USDT", "positionAmt": "0.25", "updateTime": 1500},
+    ]
+    adapter._client.fetch_positions = lambda: payload
+    positions, timestamp_ms = adapter.fetch_positions()
+    assert timestamp_ms == 2000
+    assert positions["BTC_USDT"] == 0.75
+    assert positions["ETHUSDT"] == -0.1
+
+
+def test_fetch_positions_missing_update_time_returns_zero_timestamp() -> None:
+    adapter = binance.BinanceExecutionAdapter(_build_live_config())
+    payload = [{"symbol": "BTCUSDT", "positionAmt": "0.1", "updateTime": 0}]
+    adapter._client.fetch_positions = lambda: payload
+    positions, timestamp_ms = adapter.fetch_positions()
+    assert positions["BTCUSDT"] == 0.1
+    assert timestamp_ms == 0

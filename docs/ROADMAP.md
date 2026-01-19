@@ -81,18 +81,29 @@ see the technical docs referenced in docs/README.md.
 - [ ] Story 3.2: Exchange adapter skeleton
   - [x] Task: Implement adapter stubs per docs/INTEGRATIONS.md
   - [~] Task: Add idempotency + dedup placeholders
+  - [~] Task: Implement REST client base (signing, time sync, retry, rate limit, error mapping)
+  - [~] Task: Implement Binance live adapter (POST /order, GET /order, DELETE /order)
+  - [~] Task: Add duplicate handling (clientOrderId already exists -> query status)
+  - [~] Task: Add symbol normalization specific to Binance (strip '-'/'_')
+  - [~] Task: Add unit tests for mapping/duplicate/symbol normalization
   - Acceptance: Execution flow can be simulated end-to-end
 
 ## Epic 4: Safety + reconciliation
 - [~] Story 4.1: Safety service skeleton
   - [x] Task: Implement safety service interface in src/hyperliquid/safety/service.py
   - [~] Task: Define reconciliation models and checks
+  - [~] Task: Implement reconcile snapshots (stale snapshot, missing symbol, drift thresholds)
+  - [~] Task: Implement local position aggregation from order_intents + order_results
+  - [~] Task: Add reconcile policy (no auto-promote from ARMED_SAFE by default)
+  - [~] Task: Add safety config fields (warn/critical thresholds, snapshot staleness)
+  - [~] Task: Add reconciliation unit tests
   - Acceptance: Safety service can validate a mock execution state
 
 ## Epic 5: Persistence + audit
 - [~] Story 5.1: Persistence pipeline
   - [x] Task: Implement state persistence per docs/DATA_MODEL.md (order_intents/order_results)
   - [x] Task: Add cursor + processed_txs persistence
+  - [x] Task: Persist contract_version in order_results (schema bump to v2)
   - [ ] Task: Add audit log entries for key state changes
   - Acceptance: Core state can be recovered after restart
 
@@ -100,43 +111,46 @@ see the technical docs referenced in docs/README.md.
 - [~] Story 6.1: Test scaffolding
   - [~] Task: Add tests listed in docs/TEST_PLAN.md TODOs (partial)
   - [x] Task: Add minimal unit tests for settings + DB init (added multiple unit tests)
+  - [x] Task: Add unit tests for execution recovery + binance adapter mapping
+  - [x] Task: Add unit tests for safety reconcile flow
   - Acceptance: Tests pass locally per docs/TEST_PLAN.md
 
 - [ ] Story 6.2: Ops validation
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable
 
-## Handoff Notes (2026/01/18)
+## Handoff Notes (2026/01/18 - end of day)
 
   ### Current Status
 
-  - Ingest: REST backfill + live polling wired; WS streaming with fallback/reconnect & buffer limits added.
-  - Execution: Binance adapter stub wired; fail‑fast if live mode not implemented; dry-run/backfill-only never submit.
-  - Safety: Minimal reconciliation models/hooks added.
-  - Maintenance skip: gap-only bypass with explicit flag and safety reason codes.
-  - Tests: Added unit tests for maintenance skip, symbol map filtering, and live polling path.
+  - Execution idempotency: clientOrderId persisted; recovery short-circuits for FILLED/SUBMITTED/UNKNOWN do not invoke post-hooks.
+  - Execution adapter: Binance live REST client implemented (signing, time sync, retry/backoff, rate limit, error mapping).
+  - Binance adapter: POST/GET/DELETE order wired; duplicate clientOrderId triggers query; timeout/network -> UNKNOWN.
+  - Safety reconcile: snapshots handle stale/missing symbols; drift thresholds applied; no auto-promote from ARMED_SAFE by default.
+  - Local positions: derived from order_intents + order_results (filled_qty + side sign); symbol normalization with zero filtering.
+  - DB schema: order_results.contract_version added; DB_SCHEMA_VERSION=2; runbook updated with manual ALTER TABLE.
 
   ### Key Files
 
-  - Ingest adapter: src/hyperliquid/ingest/adapters/hyperliquid.py
-  - Ingest coordinator: src/hyperliquid/ingest/coordinator.py
-  - Execution adapter stub: src/hyperliquid/execution/adapters/binance.py
-  - Execution service wiring: src/hyperliquid/execution/service.py
+  - Binance adapter: src/hyperliquid/execution/adapters/binance.py
+  - Execution recovery gate: src/hyperliquid/execution/service.py
   - Safety reconcile: src/hyperliquid/safety/reconcile.py
-  - Config/schema: config/schema.json, config/settings.yaml
-  - Docs: docs/modules/INGEST.md, docs/modules/EXECUTION.md, docs/modules/SAFETY.md, docs/RUNBOOK.md, docs/ROADMAP.md
+  - Local positions: src/hyperliquid/storage/positions.py
+  - Safety config: config/schema.json, config/settings.yaml
+  - Tests: tests/unit/test_execution_recovery.py, tests/unit/test_binance_adapter.py, tests/unit/test_safety_reconcile.py
+  - Runbook migration: docs/RUNBOOK.md
 
   ### Remaining High‑Priority Work
 
-  1. Execution idempotency placeholders / clientOrderId persistence (per docs/modules/EXECUTION.md)
-  2. Safety reconciliation implementation using exchange positions
-  3. Binance adapter live implementation (REST signing, retries, rate limit handling)
-  4. Audit log entries for key state changes
-  5. Integration tests (esp. WS/backfill + execution error paths)
+  1. Wire reconciliation into orchestrator loop/startup flow (fetch exchange positions, call reconcile, update safety state).
+  2. Implement Binance exchange position fetch (GET /fapi/v2/positionRisk) for reconcile.
+  3. Implement symbol mapping/precision filters (exchangeInfo) before live orders.
+  4. Execution FSM enhancements: time-in-force, fallback, cancel flow, retry budgets.
+  5. Audit log entries for key state changes.
+  6. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
 
   ### Notes / Risks
 
-  - WS dependency: requires websocket-client in requirements.txt.
-  - Symbol map is strict: unmapped/spot @ coins are skipped by design.
-  - live mode uses WS when healthy; falls back to REST if stale >30s or WS unavailable.
-  - Execution adapter in live mode triggers HALT with reason EXECUTION_ADAPTER_NOT_IMPLEMENTED.
+  - Binance symbol normalization strips '-'/'_' in adapter; ensure mapping is explicit when integrating exchangeInfo.
+  - Stale snapshot -> ARMED_SAFE; missing symbol -> HALT (after zero-filter).
+  - Retry/backoff uses urllib; no external HTTP client dependency.

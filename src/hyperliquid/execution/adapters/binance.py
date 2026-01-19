@@ -14,7 +14,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from hyperliquid.common.idempotency import sanitize_client_order_id
-from hyperliquid.common.models import OrderIntent, OrderResult, assert_contract_version
+from hyperliquid.common.models import (
+    OrderIntent,
+    OrderResult,
+    assert_contract_version,
+    normalize_symbol,
+)
 
 
 class AdapterNotImplementedError(RuntimeError):
@@ -196,6 +201,36 @@ class BinanceExecutionAdapter:
                     )
             return _map_error_to_result(intent, exc)
 
+    def fetch_positions(self) -> tuple[dict[str, float], int]:
+        if not self._config.enabled:
+            raise AdapterNotImplementedError("Binance execution adapter is disabled")
+        if self._config.mode != "live":
+            raise AdapterNotImplementedError("Binance execution adapter is not wired")
+        payload = self._client.fetch_positions()
+        positions: dict[str, float] = {}
+        latest_update_ms: int | None = None
+        for entry in payload:
+            symbol = str(entry.get("symbol", ""))
+            if not symbol:
+                continue
+            try:
+                position_amt = float(entry.get("positionAmt", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                continue
+            try:
+                update_ms = int(entry.get("updateTime", 0) or 0)
+            except (TypeError, ValueError):
+                update_ms = 0
+            if update_ms > 0 and (latest_update_ms is None or update_ms > latest_update_ms):
+                latest_update_ms = update_ms
+            if position_amt == 0.0:
+                continue
+            key = normalize_symbol(symbol)
+            positions[key] = positions.get(key, 0.0) + position_amt
+        if latest_update_ms is None:
+            latest_update_ms = 0
+        return positions, latest_update_ms
+
     def _stub_reject(self, intent: OrderIntent, code: str) -> OrderResult:
         return OrderResult(
             correlation_id=intent.correlation_id,
@@ -252,6 +287,12 @@ class BinanceRestClient:
             "origClientOrderId": sanitize_client_order_id(intent.client_order_id),
         }
         return self._request("DELETE", "/fapi/v1/order", params=params, signed=True)
+
+    def fetch_positions(self) -> list[dict]:
+        payload = self._request("GET", "/fapi/v2/positionRisk", params={}, signed=True)
+        if isinstance(payload, list):
+            return payload
+        return []
 
     def _request(self, method: str, path: str, *, params: dict, signed: bool) -> dict:
         attempt = 0
