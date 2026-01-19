@@ -37,6 +37,14 @@ Checklist:
 - Fix root cause (storage, config mismatch, position mode)
 - Restart after manual approval
 
+### 3) Execution Retry Budget Exceeded
+Checklist:
+- Inspect system_state.safety_reason_code == EXECUTION_RETRY_BUDGET_EXCEEDED
+- Review order_results for UNKNOWN and RETRY_BUDGET_EXCEEDED errors
+- Verify exchange connectivity and API health
+- Consider increasing retry_budget_window_sec or retry_budget_max_attempts only if
+  exchange availability is the root cause
+
 Maintenance restart:
 - Use an explicit maintenance flag (config: ingest.maintenance_skip_gap=true) to skip gap enforcement on restart.
 - When enabled, cursor is set to now, safety_reason_code records the bypass, and the system starts in ARMED_SAFE.
@@ -64,6 +72,8 @@ Checklist:
 ### Order State Recovery
 - For UNKNOWN orders, query exchange by clientOrderId
 - Update order_results based on actual status
+- UNKNOWNs are retried automatically up to the configured retry budget; after that,
+  safety transitions to ARMED_SAFE or HALT per execution.retry_budget_mode.
 
 ## Maintenance
 

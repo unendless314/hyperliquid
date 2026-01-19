@@ -19,6 +19,9 @@
 - execution.retry_budget_window_sec bounds total UNKNOWN recovery time window.
 - execution.unknown_poll_interval_sec controls UNKNOWN recovery polling cadence.
 - execution.retry_budget_mode sets safety transition on retry budget exhaustion (ARMED_SAFE or HALT).
+- execution.market_fallback_enabled controls whether to submit a market fallback after TIF.
+- execution.market_fallback_threshold_pct limits fallback to small remaining qty (ratio).
+- execution.market_slippage_cap_pct caps mark/limit slippage allowed before fallback.
 
 ## Outputs
 - OrderResult
@@ -47,6 +50,10 @@ PENDING -> SUBMITTED -> PARTIALLY_FILLED -> FILLED | CANCELED | EXPIRED | REJECT
 - If market_fallback_enabled, submit IOC/market for remaining qty only
 - Fallback uses a new clientOrderId (new nonce)
 - Fallback must pass slippage and min_notional checks
+- Fallback triggers only after the limit order is confirmed CANCELED/EXPIRED and remaining
+  quantity is below market_fallback_threshold_pct.
+- Fallback runs through the same safety pre-hooks as normal execution.
+- Fallback results merge filled_qty and avg_price with the original limit order.
 
 ## Error Handling
 - 429: shared backoff; suspend submit + polling

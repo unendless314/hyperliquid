@@ -14,6 +14,7 @@ class _AdapterStub:
     cancel_calls: int = 0
     execute_status: str = "SUBMITTED"
     query_status: str = "SUBMITTED"
+    mark_price: float = 100.0
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         self.calls += 1
@@ -50,6 +51,10 @@ class _AdapterStub:
             error_code=None,
             error_message=None,
         )
+
+    def fetch_mark_price(self, symbol: str) -> float:
+        _ = symbol
+        return self.mark_price
 
 
 def _intent() -> OrderIntent:
@@ -308,3 +313,182 @@ def test_unknown_retry_budget_exceeded_updates_safety() -> None:
     assert result.error_code == "RETRY_BUDGET_EXCEEDED"
     assert called["mode"] == "HALT"
     assert called["reason_code"] == "EXECUTION_RETRY_BUDGET_EXCEEDED"
+
+
+def test_market_fallback_rejects_on_slippage() -> None:
+    adapter = _AdapterStub()
+    intent = OrderIntent(
+        correlation_id="hl-abc-10-BTCUSDT",
+        client_order_id="hl-abc-10-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="LIMIT",
+        qty=1.0,
+        price=100.0,
+        reduce_only=0,
+        time_in_force="GTC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    service = ExecutionService(
+        adapter=adapter,
+        result_provider=lambda _: None,
+        config=ExecutionServiceConfig(
+            tif_seconds=1,
+            order_poll_interval_sec=1,
+            retry_budget_max_attempts=1,
+            retry_budget_window_sec=1,
+            unknown_poll_interval_sec=1,
+            retry_budget_mode="ARMED_SAFE",
+            market_fallback_enabled=True,
+            market_fallback_threshold_pct=1.0,
+            market_slippage_cap_pct=0.005,
+        ),
+    )
+    adapter.execute_status = "SUBMITTED"
+    adapter.query_status = "SUBMITTED"
+    adapter.mark_price = 200.0
+    result = service.execute(intent)
+    assert result.status == "REJECTED"
+    assert result.error_code == "SLIPPAGE_EXCEEDED"
+
+
+def test_market_fallback_merges_filled_qty() -> None:
+    adapter = _AdapterStub()
+    intent = OrderIntent(
+        correlation_id="hl-abc-11-BTCUSDT",
+        client_order_id="hl-abc-11-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="LIMIT",
+        qty=1.0,
+        price=100.0,
+        reduce_only=0,
+        time_in_force="GTC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    service = ExecutionService(
+        adapter=adapter,
+        result_provider=lambda _: None,
+        config=ExecutionServiceConfig(
+            tif_seconds=1,
+            order_poll_interval_sec=1,
+            retry_budget_max_attempts=1,
+            retry_budget_window_sec=1,
+            unknown_poll_interval_sec=1,
+            retry_budget_mode="ARMED_SAFE",
+            market_fallback_enabled=True,
+            market_fallback_threshold_pct=1.0,
+            market_slippage_cap_pct=1.0,
+        ),
+    )
+    adapter.execute_status = "SUBMITTED"
+    adapter.query_status = "CANCELED"
+    adapter.cancel_order = lambda _: OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-1",
+        status="CANCELED",
+        filled_qty=0.4,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    adapter.query_order = lambda _: OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-1",
+        status="CANCELED",
+        filled_qty=0.4,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    original_execute = adapter.execute
+
+    def execute_with_fallback(intent: OrderIntent) -> OrderResult:
+        if intent.order_type == "MARKET":
+            return OrderResult(
+                correlation_id=intent.correlation_id,
+                exchange_order_id="ex-2",
+                status="FILLED",
+                filled_qty=0.6,
+                avg_price=101.0,
+                error_code=None,
+                error_message=None,
+            )
+        return original_execute(intent)
+
+    adapter.execute = execute_with_fallback
+    result = service.execute(intent)
+    assert result.status == "FILLED"
+    assert abs(result.filled_qty - 1.0) < 1e-9
+
+
+def test_market_fallback_keeps_base_avg_price_when_missing() -> None:
+    adapter = _AdapterStub()
+    intent = OrderIntent(
+        correlation_id="hl-abc-12-BTCUSDT",
+        client_order_id="hl-abc-12-BTCUSDT-deadbeef",
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="LIMIT",
+        qty=1.0,
+        price=100.0,
+        reduce_only=0,
+        time_in_force="GTC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    service = ExecutionService(
+        adapter=adapter,
+        result_provider=lambda _: None,
+        config=ExecutionServiceConfig(
+            tif_seconds=1,
+            order_poll_interval_sec=1,
+            retry_budget_max_attempts=1,
+            retry_budget_window_sec=1,
+            unknown_poll_interval_sec=1,
+            retry_budget_mode="ARMED_SAFE",
+            market_fallback_enabled=True,
+            market_fallback_threshold_pct=1.0,
+            market_slippage_cap_pct=1.0,
+        ),
+    )
+    adapter.execute_status = "SUBMITTED"
+    adapter.query_status = "CANCELED"
+    adapter.cancel_order = lambda _: OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-1",
+        status="CANCELED",
+        filled_qty=0.4,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    adapter.query_order = lambda _: OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-1",
+        status="CANCELED",
+        filled_qty=0.4,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    original_execute = adapter.execute
+
+    def execute_with_fallback(intent: OrderIntent) -> OrderResult:
+        if intent.order_type == "MARKET":
+            return OrderResult(
+                correlation_id=intent.correlation_id,
+                exchange_order_id="ex-2",
+                status="FILLED",
+                filled_qty=0.6,
+                avg_price=None,
+                error_code=None,
+                error_message=None,
+            )
+        return original_execute(intent)
+
+    adapter.execute = execute_with_fallback
+    result = service.execute(intent)
+    assert result.avg_price == 100.0

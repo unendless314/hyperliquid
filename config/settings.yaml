@@ -40,6 +40,9 @@ execution:
   retry_budget_window_sec: 30
   unknown_poll_interval_sec: 2
   retry_budget_mode: "ARMED_SAFE"
+  market_fallback_enabled: false
+  market_fallback_threshold_pct: 0.1
+  market_slippage_cap_pct: 0.005
   binance:
     enabled: false
     mode: "stub"

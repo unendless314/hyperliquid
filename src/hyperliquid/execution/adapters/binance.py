@@ -286,6 +286,15 @@ class BinanceExecutionAdapter:
             latest_update_ms = 0
         return positions, latest_update_ms
 
+    def fetch_mark_price(self, symbol: str) -> Decimal:
+        if not self._config.enabled:
+            raise AdapterNotImplementedError("Binance execution adapter is disabled")
+        if self._config.mode != "live":
+            raise AdapterNotImplementedError("Binance execution adapter is not wired")
+        if not self._meta_rate_limiter.allow():
+            raise BinanceRateLimitError("Rate limit hit")
+        return self._client.fetch_mark_price(_normalize_binance_symbol(symbol))
+
     def query_order(self, intent: OrderIntent) -> OrderResult:
         if not self._config.enabled:
             raise AdapterNotImplementedError("Binance execution adapter is disabled")

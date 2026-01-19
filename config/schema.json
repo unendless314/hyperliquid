@@ -200,6 +200,17 @@
           "type": "string",
           "enum": ["ARMED_SAFE", "HALT", "armed_safe", "halt"]
         },
+        "market_fallback_enabled": {
+          "type": "boolean"
+        },
+        "market_fallback_threshold_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "market_slippage_cap_pct": {
+          "type": "number",
+          "minimum": 0
+        },
         "binance": {
           "type": "object",
           "additionalProperties": false,
