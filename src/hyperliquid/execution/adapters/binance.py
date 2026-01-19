@@ -286,6 +286,22 @@ class BinanceExecutionAdapter:
             latest_update_ms = 0
         return positions, latest_update_ms
 
+    def query_order(self, intent: OrderIntent) -> OrderResult:
+        if not self._config.enabled:
+            raise AdapterNotImplementedError("Binance execution adapter is disabled")
+        if self._config.mode != "live":
+            raise AdapterNotImplementedError("Binance execution adapter is not wired")
+        order = self._client.query_order(intent)
+        return _result_from_exchange(intent, order)
+
+    def cancel_order(self, intent: OrderIntent) -> OrderResult:
+        if not self._config.enabled:
+            raise AdapterNotImplementedError("Binance execution adapter is disabled")
+        if self._config.mode != "live":
+            raise AdapterNotImplementedError("Binance execution adapter is not wired")
+        order = self._client.cancel_order(intent)
+        return _result_from_exchange(intent, order)
+
     def _stub_reject(self, intent: OrderIntent, code: str) -> OrderResult:
         return OrderResult(
             correlation_id=intent.correlation_id,

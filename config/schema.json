@@ -176,6 +176,30 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "tif_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "order_poll_interval_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retry_budget_max_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retry_budget_window_sec": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown_poll_interval_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retry_budget_mode": {
+          "type": "string",
+          "enum": ["ARMED_SAFE", "HALT", "armed_safe", "halt"]
+        },
         "binance": {
           "type": "object",
           "additionalProperties": false,

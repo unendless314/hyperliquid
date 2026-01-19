@@ -19,7 +19,7 @@ from hyperliquid.execution.adapters.binance import (
     BinanceExecutionAdapter,
     BinanceExecutionConfig,
 )
-from hyperliquid.execution.service import ExecutionService
+from hyperliquid.execution.service import ExecutionService, ExecutionServiceConfig
 from hyperliquid.ingest.coordinator import IngestCoordinator
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
 from hyperliquid.safety.reconcile import PositionSnapshot
@@ -143,6 +143,14 @@ class Orchestrator:
         def safety_mode_provider() -> str:
             return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
 
+        def safety_state_updater(mode: str, reason_code: str, reason_message: str) -> None:
+            set_safety_state(
+                conn,
+                mode=mode,
+                reason_code=reason_code,
+                reason_message=reason_message,
+            )
+
         safety_service = SafetyService(safety_mode_provider=safety_mode_provider)
         persistence = DbPersistence(conn)
         execution_adapter = None
@@ -153,10 +161,12 @@ class Orchestrator:
                 logger=logger,
             )
         execution_service = ExecutionService(
+            config=ExecutionServiceConfig.from_settings(self.settings.raw),
             pre_hooks=[safety_service.pre_execution_check],
             post_hooks=[safety_service.post_execution_check],
             adapter=execution_adapter,
             result_provider=persistence.get_order_result,
+            safety_state_updater=safety_state_updater,
         )
         decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
         ingest_service = IngestService()

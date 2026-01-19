@@ -34,6 +34,12 @@ ingest:
         next_target_net_position: 0.01
         timestamp_ms: 0
 execution:
+  tif_seconds: 5
+  order_poll_interval_sec: 2
+  retry_budget_max_attempts: 3
+  retry_budget_window_sec: 30
+  unknown_poll_interval_sec: 2
+  retry_budget_mode: "ARMED_SAFE"
   binance:
     enabled: false
     mode: "stub"

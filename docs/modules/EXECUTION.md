@@ -13,6 +13,12 @@
 
 ## Configuration Notes
 - execution.binance.* configures the exchange adapter (enabled, mode, endpoints, rate limit, retry).
+- execution.tif_seconds controls how long limit orders wait before cancel.
+- execution.order_poll_interval_sec controls order status polling cadence.
+- execution.retry_budget_max_attempts limits UNKNOWN recovery attempts per order.
+- execution.retry_budget_window_sec bounds total UNKNOWN recovery time window.
+- execution.unknown_poll_interval_sec controls UNKNOWN recovery polling cadence.
+- execution.retry_budget_mode sets safety transition on retry budget exhaustion (ARMED_SAFE or HALT).
 
 ## Outputs
 - OrderResult
@@ -49,6 +55,13 @@ PENDING -> SUBMITTED -> PARTIALLY_FILLED -> FILLED | CANCELED | EXPIRED | REJECT
 - Rejected orders: record error_code and error_message
 - Unknown status: record retry_count and use backoff before next poll
 - Recovery short-circuits (existing SUBMITTED/UNKNOWN/FILLED) do not invoke post-execution hooks.
+
+## UNKNOWN Recovery Policy
+- UNKNOWN means the exchange status could not be confirmed.
+- UNKNOWN orders are actively recovered by querying the exchange within a retry budget.
+- Historical UNKNOWNs (loaded from persistence) are also recovered on execution.
+- Retry budget is defined by max attempts and a time window; on exhaustion, safety transitions
+  to execution.retry_budget_mode with reason_code EXECUTION_RETRY_BUDGET_EXCEEDED.
 
 ## Partial Fill Policy
 - PARTIALLY_FILLED is a normal state and does not by itself restrict future orders.
