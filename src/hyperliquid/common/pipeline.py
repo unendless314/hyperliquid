@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional
 
 from hyperliquid.common.models import OrderIntent, OrderResult, PositionDeltaEvent
-from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.service import DecisionInputs, DecisionService
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.storage.persistence import Persistence
 
@@ -13,12 +13,16 @@ from hyperliquid.storage.persistence import Persistence
 class Pipeline:
     decision: DecisionService
     execution: ExecutionService
+    decision_inputs_provider: Optional[Callable[[PositionDeltaEvent], DecisionInputs]] = None
     persistence: Optional[Persistence] = None
 
     def process_events(self, events: Iterable[PositionDeltaEvent]) -> List[OrderResult]:
         results: List[OrderResult] = []
         for event in events:
-            intents = self.decision.decide(event)
+            inputs = None
+            if self.decision_inputs_provider is not None:
+                inputs = self.decision_inputs_provider(event)
+            intents = self.decision.decide(event, inputs)
             for intent in intents:
                 if self.persistence is not None:
                     ensure_intent = getattr(self.persistence, "ensure_intent", None)

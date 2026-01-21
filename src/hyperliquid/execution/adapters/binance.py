@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
+from hyperliquid.common.filters import SymbolFilters
 from hyperliquid.common.idempotency import sanitize_client_order_id
 from hyperliquid.common.models import (
     OrderIntent,
@@ -294,6 +295,24 @@ class BinanceExecutionAdapter:
         if not self._meta_rate_limiter.allow():
             raise BinanceRateLimitError("Rate limit hit")
         return self._client.fetch_mark_price(_normalize_binance_symbol(symbol))
+
+    def fetch_symbol_filters(self, symbol: str) -> SymbolFilters | None:
+        if not self._config.enabled:
+            raise AdapterNotImplementedError("Binance execution adapter is disabled")
+        if self._config.mode != "live":
+            raise AdapterNotImplementedError("Binance execution adapter is not wired")
+        filters = self._ensure_filters()
+        if not filters:
+            return None
+        symbol_filters = filters.get(_normalize_binance_symbol(symbol))
+        if symbol_filters is None:
+            return None
+        return SymbolFilters(
+            min_qty=float(symbol_filters.min_qty),
+            step_size=float(symbol_filters.step_size),
+            min_notional=float(symbol_filters.min_notional),
+            tick_size=float(symbol_filters.tick_size),
+        )
 
     def query_order(self, intent: OrderIntent) -> OrderResult:
         if not self._config.enabled:

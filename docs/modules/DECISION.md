@@ -63,13 +63,20 @@ event contracts, the decision layer accepts a lightweight DecisionInputs/Decisio
 object that includes local position and provider hooks.
 
 Required fields:
+- safety_mode: str (ARMED_SAFE/HALT/NORMAL)
+
+Optional fields (injected by pipeline):
 - local_current_position: float (signed net position for the symbol)
 - closable_qty: float (abs size available for reduce-only)
-- safety_mode: str (ARMED_SAFE/HALT/NORMAL)
+- expected_price: PriceSnapshot (expected execution price from ingest/leader)
+
+Missing behavior:
+- For DECREASE/FLIP-close sizing, missing local_current_position or closable_qty must reject the event.
+- For INCREASE sizing, missing local_current_position is allowed (treated as 0).
 
 Provider hooks (for testability):
 - now_ms_provider: Callable[[], int] for freshness checks
-- price_provider: Callable[[str], PriceSnapshot] for mark/mid price + timestamp
+- price_provider: Callable[[str], PriceSnapshot] for mark/mid price + timestamp (reference)
 - filters_provider: Callable[[str], SymbolFilters | None] for exchange filters
 
 ## Price Source / Fallback
@@ -77,8 +84,50 @@ Provider hooks (for testability):
 - If adapter price is unavailable, fallback to ingest price is allowed only if enabled in config.
 - Fallback prices must pass a stricter staleness threshold and must attach a risk_note.
 
+## Slippage (Market Orders Included)
+Slippage compares an expected price to a reference price. Market orders MUST still
+perform slippage checks when both prices are available.
+
+Definitions:
+- expected_price: price observed by ingest/leader/strategy (event-time expectation).
+- reference_price: execution adapter mark/mid price.
+
+Current default:
+- expected_price is sourced from ingest/leader (DecisionInputs).
+- reference_price is sourced from execution adapter (price_provider).
+- price_source=ingest should remain off unless an ingest reference provider is implemented.
+
+Computation:
+- slippage = abs(reference_price - expected_price) / expected_price
+
+Rules:
+- If slippage_cap_pct <= 0, skip slippage checks.
+- If either price is missing:
+  - price_failure_policy = reject -> reject with missing_reference_price/stale_price.
+  - price_failure_policy = allow_without_price -> allow and attach a risk_note.
+- If slippage > slippage_cap_pct, reject with slippage_exceeded.
+
 ## Freshness Guard
 - Events are rejected if timestamp is older than max_stale_ms or ahead of now_ms by more than max_future_ms.
+
+## PriceSnapshot
+- PriceSnapshot includes price, timestamp_ms, and source fields.
+- price_max_stale_ms applies to the primary price source; price_fallback_max_stale_ms applies to fallback.
+- expected_price_max_stale_ms applies to expected_price used in slippage checks.
+
+## Failure Behavior
+- If price or filters are unavailable, behavior is controlled by decision config:
+  - price_failure_policy: reject | allow_without_price
+  - filters_failure_policy: reject | allow_without_filters
+- When allowing without price/filters, a risk_note is attached for observability.
+- price_source controls which provider is primary; if the selected provider is unavailable,
+  fallback applies only when price_fallback_enabled is true.
+
+## Risk Reason Codes
+Examples (non-exhaustive): stale_event, future_event, stale_price, missing_reference_price,
+missing_expected_price, stale_expected_price, filters_unavailable, filter_min_qty,
+filter_step_size, filter_tick_size, filter_min_notional, slippage_exceeded, sizing_invalid,
+kelly_params_missing.
 
 ## Filters
 - Decision uses a common filter model (min_qty, step_size, min_notional, tick_size).

@@ -98,3 +98,10 @@ class OrderResult:
     error_code: Optional[str]
     error_message: Optional[str]
     contract_version: str = field(default=CONTRACT_VERSION)
+
+
+@dataclass(frozen=True)
+class PriceSnapshot:
+    price: float
+    timestamp_ms: int
+    source: str

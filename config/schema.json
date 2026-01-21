@@ -199,14 +199,64 @@
           "type": "integer",
           "minimum": 0
         },
+        "price_max_stale_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_price_max_stale_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "price_failure_policy": {
+          "type": "string",
+          "enum": ["reject", "allow_without_price"]
+        },
         "filters_enabled": {
           "type": "boolean"
+        },
+        "filters_failure_policy": {
+          "type": "string",
+          "enum": ["reject", "allow_without_filters"]
         },
         "blacklist_symbols": {
           "type": "array",
           "items": {
             "type": "string",
             "minLength": 1
+          }
+        },
+        "slippage_cap_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sizing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["fixed", "proportional", "kelly"]
+            },
+            "fixed_qty": {
+              "type": "number",
+              "minimum": 0
+            },
+            "proportional_ratio": {
+              "type": "number",
+              "minimum": 0
+            },
+            "kelly_win_rate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "kelly_edge": {
+              "type": "number",
+              "minimum": 0
+            },
+            "kelly_fraction": {
+              "type": "number",
+              "minimum": 0
+            }
           }
         }
       }

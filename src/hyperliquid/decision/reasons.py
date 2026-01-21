@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+# Risk rejection / note reason codes (stable identifiers for logs and analytics).
+STALE_EVENT = "stale_event"
+FUTURE_EVENT = "future_event"
+MISSING_TIMESTAMP = "missing_timestamp_ms"
+MISSING_LOCAL_POSITION = "missing_local_position"
+MISSING_CLOSABLE_QTY = "missing_closable_qty"
+BLACKLISTED_SYMBOL = "blacklisted_symbol"
+MISSING_EXPECTED_PRICE = "missing_expected_price"
+MISSING_REFERENCE_PRICE = "missing_reference_price"
+STALE_PRICE = "stale_price"
+STALE_EXPECTED_PRICE = "stale_expected_price"
+PRICE_FALLBACK_USED = "price_fallback_used"
+FILTERS_UNAVAILABLE = "filters_unavailable"
+FILTER_MIN_QTY = "filter_min_qty"
+FILTER_STEP_SIZE = "filter_step_size"
+FILTER_TICK_SIZE = "filter_tick_size"
+FILTER_MIN_NOTIONAL = "filter_min_notional"
+SLIPPAGE_EXCEEDED = "slippage_exceeded"
+SIZING_INVALID = "sizing_invalid"
+KELLY_PARAMS_MISSING = "kelly_params_missing"
+NO_CLOSABLE_QTY = "no_closable_qty"

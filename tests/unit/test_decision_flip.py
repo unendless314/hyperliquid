@@ -1,5 +1,5 @@
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.service import DecisionInputs, DecisionService
 from hyperliquid.common.models import PositionDeltaEvent
 
 
@@ -28,7 +28,12 @@ def test_flip_generates_distinct_intents() -> None:
         config=DecisionConfig(),
         safety_mode_provider=_safety_mode_provider("ARMED_LIVE"),
     )
-    intents = service.decide(_flip_event())
+    inputs = DecisionInputs(
+        safety_mode="ARMED_LIVE",
+        local_current_position=1.5,
+        closable_qty=1.5,
+    )
+    intents = service.decide(_flip_event(), inputs)
 
     assert len(intents) == 2
     assert intents[0].correlation_id != intents[1].correlation_id
@@ -41,7 +46,12 @@ def test_flip_in_armed_safe_keeps_reduce_only() -> None:
         config=DecisionConfig(),
         safety_mode_provider=_safety_mode_provider("ARMED_SAFE"),
     )
-    intents = service.decide(_flip_event())
+    inputs = DecisionInputs(
+        safety_mode="ARMED_SAFE",
+        local_current_position=1.5,
+        closable_qty=1.5,
+    )
+    intents = service.decide(_flip_event(), inputs)
 
     assert len(intents) == 1
     assert intents[0].reduce_only == 1

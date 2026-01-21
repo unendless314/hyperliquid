@@ -9,12 +9,14 @@ from hyperliquid.common.metrics import MetricsEmitter
 from hyperliquid.common.models import (
     CONTRACT_VERSION,
     PositionDeltaEvent,
+    PriceSnapshot,
     assert_contract_version,
+    normalize_execution_symbol,
 )
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.service import DecisionInputs, DecisionService
 from hyperliquid.execution.adapters.binance import (
     AdapterNotImplementedError,
     BinanceExecutionAdapter,
@@ -170,10 +172,45 @@ class Orchestrator:
             safety_state_updater=safety_state_updater,
         )
         decision_config = DecisionConfig.from_settings(self.settings.raw)
+
+        def price_provider(symbol: str) -> PriceSnapshot | None:
+            adapter = execution_service.adapter
+            fetcher = getattr(adapter, "fetch_mark_price", None)
+            if adapter is None or not callable(fetcher):
+                return None
+            try:
+                price = float(fetcher(symbol))
+            except Exception:
+                return None
+            return PriceSnapshot(price=price, timestamp_ms=int(time.time() * 1000), source="adapter")
+
+        def filters_provider(symbol: str):
+            adapter = execution_service.adapter
+            fetcher = getattr(adapter, "fetch_symbol_filters", None)
+            if adapter is None or not callable(fetcher):
+                return None
+            try:
+                return fetcher(symbol)
+            except Exception:
+                return None
+
+        def decision_inputs_provider(event: PositionDeltaEvent) -> DecisionInputs:
+            safety_mode = safety_mode_provider()
+            positions = load_local_positions_from_orders(conn)
+            symbol_key = normalize_execution_symbol(event.symbol)
+            local_position = float(positions.get(symbol_key, 0.0))
+            return DecisionInputs(
+                safety_mode=safety_mode,
+                local_current_position=local_position,
+                closable_qty=abs(local_position),
+            )
+
         decision_service = DecisionService(
             config=decision_config,
             safety_mode_provider=safety_mode_provider,
             replay_policy_provider=lambda: decision_config.replay_policy,
+            price_provider=price_provider,
+            filters_provider=filters_provider,
             logger=logger,
         )
         ingest_service = IngestService()
@@ -186,6 +223,7 @@ class Orchestrator:
             "pipeline": Pipeline(
                 decision=decision_service,
                 execution=execution_service,
+                decision_inputs_provider=decision_inputs_provider,
                 persistence=persistence,
             ),
         }

@@ -40,8 +40,20 @@ decision:
   price_source: "adapter"
   price_fallback_enabled: false
   price_fallback_max_stale_ms: 5000
+  price_max_stale_ms: 5000
+  expected_price_max_stale_ms: 5000
+  price_failure_policy: "allow_without_price"
   filters_enabled: true
+  filters_failure_policy: "allow_without_filters"
   blacklist_symbols: []
+  slippage_cap_pct: 0.0
+  sizing:
+    mode: "proportional"
+    fixed_qty: 0.0
+    proportional_ratio: 1.0
+    kelly_win_rate: 0.0
+    kelly_edge: 0.0
+    kelly_fraction: 1.0
 execution:
   tif_seconds: 5
   order_poll_interval_sec: 2
