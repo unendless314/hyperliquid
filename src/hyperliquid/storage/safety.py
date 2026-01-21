@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from hyperliquid.storage.db import get_system_state, set_system_state
+from hyperliquid.storage.persistence import AuditLogEntry
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,9 @@ def set_safety_state(
     reason_code: str,
     reason_message: str,
     commit: bool = True,
+    audit_recorder: Optional[Callable[[AuditLogEntry], None]] = None,
 ) -> None:
+    previous_mode = get_system_state(conn, "safety_mode") or ""
     now_ms = int(time.time() * 1000)
     set_system_state(conn, "safety_mode", mode, commit=False)
     set_system_state(conn, "safety_reason_code", reason_code, commit=False)
@@ -45,3 +48,20 @@ def set_safety_state(
     set_system_state(conn, "safety_changed_at_ms", str(now_ms), commit=False)
     if commit:
         conn.commit()
+    if audit_recorder is not None and previous_mode != mode:
+        try:
+            audit_recorder(
+                AuditLogEntry(
+                    timestamp_ms=now_ms,
+                    category="safety",
+                    entity_id="safety_mode",
+                    from_state=previous_mode,
+                    to_state=mode,
+                    reason_code=reason_code,
+                    reason_message=reason_message,
+                    event_id="",
+                    metadata=None,
+                )
+            )
+        except Exception:
+            return None

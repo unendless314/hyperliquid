@@ -99,6 +99,26 @@ Indexes:
 - idx_order_results_status (status)
 - idx_order_results_exchange_order_id (exchange_order_id)
 
+### audit_log
+Stores state transition audit events for execution and safety.
+
+Columns:
+- id INTEGER PRIMARY KEY AUTOINCREMENT
+- timestamp_ms INTEGER NOT NULL
+- category TEXT NOT NULL
+- entity_id TEXT NOT NULL
+- from_state TEXT
+- to_state TEXT
+- reason_code TEXT
+- reason_message TEXT
+- event_id TEXT
+- metadata TEXT (JSON)
+
+Indexes:
+- idx_audit_log_category (category)
+- idx_audit_log_entity_id (entity_id)
+- idx_audit_log_timestamp_ms (timestamp_ms)
+
 ## Correlation and Idempotency
 - correlation_id must be stable and derived from PositionDeltaEvent.
 - order_intents + order_results allow restart-safe recovery.

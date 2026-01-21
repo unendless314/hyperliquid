@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-DB_SCHEMA_VERSION = "2"
+DB_SCHEMA_VERSION = "3"
 
 
 def _now_ms() -> int:
@@ -90,6 +90,26 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             ON order_results(status);
         CREATE INDEX IF NOT EXISTS idx_order_results_exchange_order_id
             ON order_results(exchange_order_id);
+
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp_ms INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            from_state TEXT,
+            to_state TEXT,
+            reason_code TEXT,
+            reason_message TEXT,
+            event_id TEXT,
+            metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_log_category
+            ON audit_log(category);
+        CREATE INDEX IF NOT EXISTS idx_audit_log_entity_id
+            ON audit_log(entity_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp_ms
+            ON audit_log(timestamp_ms);
         """
     )
     conn.commit()

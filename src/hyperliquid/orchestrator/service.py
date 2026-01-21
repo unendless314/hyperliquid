@@ -45,25 +45,29 @@ class Orchestrator:
         logger = setup_logging(self.settings.app_log_path, self.settings.log_level)
         metrics = MetricsEmitter(self.settings.metrics_log_path)
         conn = None
+        audit_recorder = None
         try:
             logger.info("boot_start")
             conn = init_db(self.settings.db_path)
+            audit_recorder = DbPersistence(conn).record_audit
             assert_schema_version(conn)
 
             config_hash = compute_config_hash(self.settings.config_path)
-            self._handle_config_hash(conn, config_hash, logger)
-            self._record_config(conn, config_hash)
+            self._handle_config_hash(conn, config_hash, logger, audit_recorder=audit_recorder)
+            self._record_config(conn, config_hash, audit_recorder=audit_recorder)
             self._ensure_bootstrap_state(conn)
-            services = self._initialize_services(conn, logger)
-            self._run_startup_reconcile(services, conn, logger, metrics)
+            services = self._initialize_services(conn, logger, audit_recorder=audit_recorder)
+            self._run_startup_reconcile(
+                services, conn, logger, metrics, audit_recorder=audit_recorder
+            )
             if get_system_state(conn, "safety_mode") == "HALT":
                 logger.warning("boot_halted")
                 return
             if self.emit_boot_event:
-                self._run_single_cycle(services, conn, logger)
+                self._run_single_cycle(services, conn, logger, audit_recorder=audit_recorder)
             logger.info("boot_complete", extra={"mode": self.mode})
             if self.run_loop:
-                self._run_loop(services, conn, logger, metrics)
+                self._run_loop(services, conn, logger, metrics, audit_recorder=audit_recorder)
             metrics.emit("cursor_lag_ms", 0)
         except AdapterNotImplementedError as exc:
             if conn is not None:
@@ -72,6 +76,7 @@ class Orchestrator:
                     mode="HALT",
                     reason_code="EXECUTION_ADAPTER_NOT_IMPLEMENTED",
                     reason_message=str(exc),
+                    audit_recorder=audit_recorder,
                 )
             raise
         except RuntimeError as exc:
@@ -81,6 +86,7 @@ class Orchestrator:
                     mode="HALT",
                     reason_code="SCHEMA_VERSION_MISMATCH",
                     reason_message="DB schema version mismatch",
+                    audit_recorder=audit_recorder,
                 )
             raise
         except KeyboardInterrupt:
@@ -91,7 +97,9 @@ class Orchestrator:
                 conn.close()
 
     @staticmethod
-    def _handle_config_hash(conn, config_hash: str, logger) -> None:
+    def _handle_config_hash(
+        conn, config_hash: str, logger, *, audit_recorder=None
+    ) -> None:
         existing = get_system_state(conn, "config_hash")
         if existing and existing != config_hash:
             logger.warning("config_hash_changed", extra={"previous": existing})
@@ -103,16 +111,17 @@ class Orchestrator:
                 mode=mode,
                 reason_code="CONFIG_HASH_CHANGED",
                 reason_message="Config hash changed; continuing per operator policy",
+                audit_recorder=audit_recorder,
             )
 
-    def _record_config(self, conn, config_hash: str) -> None:
+    def _record_config(self, conn, config_hash: str, *, audit_recorder=None) -> None:
         set_system_state(conn, "config_hash", config_hash)
         set_system_state(conn, "config_version", self.settings.config_version)
-        self._assert_contract_version(conn)
+        self._assert_contract_version(conn, audit_recorder=audit_recorder)
         set_system_state(conn, "contract_version", CONTRACT_VERSION)
 
     @staticmethod
-    def _assert_contract_version(conn) -> None:
+    def _assert_contract_version(conn, *, audit_recorder=None) -> None:
         existing = get_system_state(conn, "contract_version")
         if existing:
             try:
@@ -123,6 +132,7 @@ class Orchestrator:
                     mode="HALT",
                     reason_code="CONTRACT_VERSION_MISMATCH",
                     reason_message=str(exc),
+                    audit_recorder=audit_recorder,
                 )
                 raise
 
@@ -142,7 +152,7 @@ class Orchestrator:
         if get_system_state(conn, "safety_changed_at_ms") is None:
             set_system_state(conn, "safety_changed_at_ms", str(now_ms))
 
-    def _initialize_services(self, conn, logger) -> dict[str, object]:
+    def _initialize_services(self, conn, logger, *, audit_recorder=None) -> dict[str, object]:
         def safety_mode_provider() -> str:
             return get_system_state(conn, "safety_mode") or "ARMED_SAFE"
 
@@ -152,6 +162,7 @@ class Orchestrator:
                 mode=mode,
                 reason_code=reason_code,
                 reason_message=reason_message,
+                audit_recorder=audit_recorder,
             )
 
         safety_service = SafetyService(safety_mode_provider=safety_mode_provider)
@@ -170,6 +181,7 @@ class Orchestrator:
             adapter=execution_adapter,
             result_provider=persistence.get_order_result,
             safety_state_updater=safety_state_updater,
+            audit_recorder=audit_recorder,
         )
         decision_config = DecisionConfig.from_settings(self.settings.raw)
 
@@ -228,7 +240,9 @@ class Orchestrator:
             ),
         }
 
-    def _run_startup_reconcile(self, services: dict[str, object], conn, logger, metrics) -> None:
+    def _run_startup_reconcile(
+        self, services: dict[str, object], conn, logger, metrics, *, audit_recorder=None
+    ) -> None:
         safety_config = self.settings.raw.get("safety", {})
         startup_policy = str(safety_config.get("startup_policy", "manual")).lower()
         allow_auto_promote = startup_policy in ("auto", "auto_promote", "auto-promote")
@@ -239,6 +253,7 @@ class Orchestrator:
             metrics,
             allow_auto_promote=allow_auto_promote,
             context="startup",
+            audit_recorder=audit_recorder,
         )
 
     def _run_reconcile(
@@ -250,6 +265,7 @@ class Orchestrator:
         *,
         allow_auto_promote: bool,
         context: str,
+        audit_recorder=None,
     ) -> None:
         safety: SafetyService = services["safety"]  # type: ignore[assignment]
         execution: ExecutionService = services["execution"]  # type: ignore[assignment]
@@ -282,6 +298,7 @@ class Orchestrator:
                     mode="HALT",
                     reason_code="RECONCILE_FAILED",
                     reason_message="Startup reconciliation failed",
+                    audit_recorder=audit_recorder,
                 )
             metrics.emit(
                 "reconcile_failed",
@@ -323,6 +340,7 @@ class Orchestrator:
             mode=result.mode,
             reason_code=result.reason_code,
             reason_message=result.reason_message,
+            audit_recorder=audit_recorder,
         )
         logger.info(
             "reconcile_result",
@@ -339,11 +357,15 @@ class Orchestrator:
             tags={"context": context, "mode": result.mode, "reason": result.reason_code},
         )
 
-    def _run_single_cycle(self, services: dict[str, object], conn, logger) -> None:
+    def _run_single_cycle(
+        self, services: dict[str, object], conn, logger, *, audit_recorder=None
+    ) -> None:
         ingest: IngestService = services["ingest"]  # type: ignore[assignment]
         pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
 
-        events = self._ingest_external_once(ingest, conn, logger)
+        events = self._ingest_external_once(
+            ingest, conn, logger, audit_recorder=audit_recorder
+        )
         if events is None:
             raw_event = RawPositionEvent(
                 symbol="BTCUSDT",
@@ -367,16 +389,18 @@ class Orchestrator:
             )
 
     def _ingest_external_once(
-        self, ingest: IngestService, conn, logger
+        self, ingest: IngestService, conn, logger, *, audit_recorder=None
     ) -> Optional[List[PositionDeltaEvent]]:
         ingest_config = self.settings.raw.get("ingest", {})
         hyperliquid_cfg = ingest_config.get("hyperliquid", {})
         if not hyperliquid_cfg.get("enabled", False):
             return None
-        coordinator = IngestCoordinator.from_settings(self.settings, ingest, logger)
+        coordinator = IngestCoordinator.from_settings(
+            self.settings, ingest, logger, audit_recorder=audit_recorder
+        )
         return coordinator.run_once(conn, mode=self.mode)
 
-    def _run_loop(self, services: dict[str, object], conn, logger, metrics) -> None:
+    def _run_loop(self, services: dict[str, object], conn, logger, metrics, *, audit_recorder=None) -> None:
         logger.info("loop_start", extra={"interval_sec": self.loop_interval_sec})
         safety_config = self.settings.raw.get("safety", {})
         reconcile_interval_sec = int(safety_config.get("reconcile_interval_sec", 0))
@@ -391,6 +415,7 @@ class Orchestrator:
                     metrics,
                     allow_auto_promote=False,
                     context="loop",
+                    audit_recorder=audit_recorder,
                 )
                 next_reconcile_ms = now_ms + reconcile_interval_sec * 1000
             metrics.emit("heartbeat", 1)

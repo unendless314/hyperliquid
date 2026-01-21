@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, replace
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from hyperliquid.common.models import PositionDeltaEvent, assert_contract_version
 from hyperliquid.common.settings import Settings
@@ -13,6 +13,7 @@ from hyperliquid.ingest.adapters.hyperliquid import (
 )
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
 from hyperliquid.storage.db import get_system_state, update_cursor
+from hyperliquid.storage.persistence import AuditLogEntry, DbPersistence
 from hyperliquid.storage.safety import set_safety_state
 
 
@@ -38,12 +39,14 @@ class IngestCoordinator:
     adapter: HyperliquidIngestAdapter
     runtime: IngestRuntimeConfig
     logger: Optional[logging.Logger] = None
+    audit_recorder: Optional[Callable[[AuditLogEntry], None]] = None
 
     @staticmethod
     def from_settings(
         settings: Settings,
         ingest_service: IngestService,
         logger: Optional[logging.Logger] = None,
+        audit_recorder: Optional[Callable[[AuditLogEntry], None]] = None,
     ) -> "IngestCoordinator":
         adapter = HyperliquidIngestAdapter(
             HyperliquidIngestConfig.from_settings(settings.raw), logger=logger
@@ -54,6 +57,7 @@ class IngestCoordinator:
             adapter=adapter,
             runtime=runtime,
             logger=logger,
+            audit_recorder=audit_recorder,
         )
 
     def run_once(self, conn, *, mode: str) -> List[PositionDeltaEvent]:
@@ -119,6 +123,7 @@ class IngestCoordinator:
             mode="HALT",
             reason_code="BACKFILL_WINDOW_EXCEEDED",
             reason_message="Gap exceeds backfill window",
+            audit_recorder=self._audit_recorder(conn),
         )
 
     def _apply_maintenance_skip(self, conn, *, now_ms: int) -> None:
@@ -143,7 +148,13 @@ class IngestCoordinator:
             mode="ARMED_SAFE",
             reason_code="MAINTENANCE_SKIP_GAP",
             reason_message="Maintenance restart skipped gap enforcement",
+            audit_recorder=self._audit_recorder(conn),
         )
+
+    def _audit_recorder(self, conn):
+        if self.audit_recorder is not None:
+            return self.audit_recorder
+        return DbPersistence(conn).record_audit
 
 
 __all__ = ["IngestCoordinator", "IngestRuntimeConfig"]

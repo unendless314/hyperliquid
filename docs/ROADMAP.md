@@ -66,8 +66,8 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add replay policy gate (close-only)
   - Acceptance: Decision service returns deterministic placeholder actions
 
-- [ ] Story 2.2: Strategy constraints
-  - [ ] Task: Implement sizing/risk constraints per docs/modules/DECISION.md
+- [x] Story 2.2: Strategy constraints
+  - [x] Task: Implement sizing/risk constraints per docs/modules/DECISION.md
   - Acceptance: Inputs violating constraints are rejected
 
 ## Epic 3: Execution engine
@@ -110,7 +110,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Implement state persistence per docs/DATA_MODEL.md (order_intents/order_results)
   - [x] Task: Add cursor + processed_txs persistence
   - [x] Task: Persist contract_version in order_results (schema bump to v2)
-  - [ ] Task: Add audit log entries for key state changes
+  - [x] Task: Add audit log entries for key state changes
   - Acceptance: Core state can be recovered after restart
 
 ## Epic 6: Testing + runbook alignment
@@ -125,35 +125,39 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable
 
-## Handoff Notes (2026/01/19)
+## Handoff Notes (2026/01/21)
 
   ### Current Status
 
-  - Execution FSM: TIF + cancel, UNKNOWN recovery + retry budget, and market fallback (slippage + min_notional checks) implemented.
-  - Adapter: Binance REST client supports order submit/query/cancel, positionRisk, exchangeInfo filters, mark price, duplicate handling.
-  - Safety: Startup + loop reconciliation wired in orchestrator; startup reconcile failure forces HALT.
-  - Positions: Local positions normalized with execution symbol rules (strip '-'/'_') for reconcile consistency.
-  - Tests: Added/extended unit coverage for execution recovery, adapter filters, reconcile, and fallback merge logic.
+  - Decision constraints implemented (freshness, replay policy wiring, risk checks, sizing, slippage with expected/reference).
+  - Common filters shared across Decision and Execution (no rounding; reject on non-multiples).
+  - Audit log persisted to SQLite (audit_log table) for execution/safety transitions.
 
   ### Key Files
 
+  - Decision service: src/hyperliquid/decision/service.py
+  - Decision config/reasons: src/hyperliquid/decision/config.py, src/hyperliquid/decision/reasons.py
+  - Common filters: src/hyperliquid/common/filters.py
   - Execution service: src/hyperliquid/execution/service.py
-  - Binance adapter: src/hyperliquid/execution/adapters/binance.py
-  - Orchestrator reconcile wiring: src/hyperliquid/orchestrator/service.py
-  - Safety reconcile: src/hyperliquid/safety/reconcile.py
-  - Local positions: src/hyperliquid/storage/positions.py
-  - Config/schema: config/settings.yaml, config/schema.json
-  - Tests: tests/unit/test_execution_recovery.py, tests/unit/test_binance_adapter.py, tests/unit/test_safety_reconcile.py
-  - Docs: docs/modules/EXECUTION.md, docs/RUNBOOK.md
+  - Audit log persistence: src/hyperliquid/storage/persistence.py, src/hyperliquid/storage/db.py
+  - Safety state audit hook: src/hyperliquid/storage/safety.py
+  - Tests: tests/unit/test_decision_slippage.py, tests/unit/test_filters.py, tests/unit/test_audit_log.py
+  - Docs: docs/modules/DECISION.md, docs/modules/EXECUTION.md, docs/DATA_MODEL.md
 
   ### Remaining Work
 
-  1. Decision constraints per docs/modules/DECISION.md (sizing + risk checks).
-  2. Audit log entries for key state changes (execution + safety transitions).
-  3. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
-  4. Ops validation checklist in docs/RUNBOOK.md (manual verification).
+  1. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
+  2. Ops validation checklist in docs/RUNBOOK.md (manual verification).
+  3. Optional: expected_price wiring from ingest/leader for slippage hard-gating.
 
   ### Notes / Risks
 
-  - Fallback merges filled_qty and avg_price; avg_price preserved if fallback lacks price.
-  - Retry budget exhaustion triggers safety state via EXECUTION_RETRY_BUDGET_EXCEEDED.
+  - DB schema bumped to v3 (audit_log table); existing DBs must be recreated if used.
+  - Slippage currently relies on expected_price being supplied; without it, policy determines allow/reject.
+
+## Handoff Checklist
+- Confirm config schema validates: tools/validate_config.py
+- Recreate DB after schema changes (audit_log uses schema v3)
+- Run key unit tests: decision_slippage, filters, audit_log
+- Verify decision config defaults (replay_policy, slippage_cap_pct, price_failure_policy)
+- Review RUNBOOK checklist before any live enablement

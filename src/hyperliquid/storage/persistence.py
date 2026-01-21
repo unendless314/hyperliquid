@@ -153,6 +153,27 @@ class DbPersistence:
         )
         self.conn.commit()
 
+    def record_audit(self, entry: "AuditLogEntry") -> None:
+        metadata = json.dumps(entry.metadata or {}, ensure_ascii=True)
+        self.conn.execute(
+            "INSERT INTO audit_log("
+            "timestamp_ms, category, entity_id, from_state, to_state, reason_code, "
+            "reason_message, event_id, metadata"
+            ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                entry.timestamp_ms,
+                entry.category,
+                entry.entity_id,
+                entry.from_state,
+                entry.to_state,
+                entry.reason_code,
+                entry.reason_message,
+                entry.event_id,
+                metadata,
+            ),
+        )
+        self.conn.commit()
+
 
 @dataclass
 class NoopPersistence:
@@ -183,6 +204,24 @@ class NoopPersistence:
 
     def record_result(self, result: OrderResult) -> None:
         _ = result
+        return None
+
+    def record_audit(self, entry: "AuditLogEntry") -> None:
+        _ = entry
+        return None
+
+
+@dataclass(frozen=True)
+class AuditLogEntry:
+    timestamp_ms: int
+    category: str
+    entity_id: str
+    from_state: str
+    to_state: str
+    reason_code: str
+    reason_message: str
+    event_id: str
+    metadata: dict | None = None
 
 
 def _intent_equivalent(left: OrderIntent, right: OrderIntent) -> bool:

@@ -10,12 +10,14 @@ from hyperliquid.execution.adapters.binance import (
     AdapterNotImplementedError,
     BinanceExecutionAdapter,
 )
+from hyperliquid.storage.persistence import AuditLogEntry
 
 
 PreExecutionHook = Callable[[OrderIntent], None]
 PostExecutionHook = Callable[[OrderIntent, OrderResult], None]
 ResultProvider = Callable[[str], Optional[OrderResult]]
 SafetyStateUpdater = Callable[[str, str, str], None]
+AuditRecorder = Callable[[AuditLogEntry], None]
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class ExecutionService:
     adapter: BinanceExecutionAdapter | None = None
     result_provider: Optional[ResultProvider] = None
     safety_state_updater: Optional[SafetyStateUpdater] = None
+    audit_recorder: Optional[AuditRecorder] = None
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         assert_contract_version(intent.contract_version)
@@ -67,29 +70,42 @@ class ExecutionService:
         if existing is not None:
             assert_contract_version(existing.contract_version)
             if existing.status == "UNKNOWN" and self.adapter is not None:
-                return self._resolve_unknown(intent, existing)
+                resolved = self._resolve_unknown(intent, existing)
+                self._record_transition(intent, existing.status, resolved)
+                return resolved
             if existing.status in ("FILLED", "SUBMITTED"):
                 return existing
+            last_status = existing.status
+        else:
+            last_status = "NONE"
         try:
             for hook in self.pre_hooks:
                 hook(intent)
         except Exception as exc:
             result = self._reject_from_hook(intent, exc)
+            self._record_transition(intent, last_status, result)
             for hook in self.post_hooks:
                 hook(intent, result)
             assert_contract_version(result.contract_version)
             return result
 
         result = self._execute_adapter(intent)
+        self._record_transition(intent, last_status, result)
+        last_status = result.status
         if (
             intent.order_type == "LIMIT"
             and self.adapter is not None
             and result.status in ("SUBMITTED", "PARTIALLY_FILLED")
         ):
             result = self._handle_limit_tif(intent, result)
+            self._record_transition(intent, last_status, result)
+            last_status = result.status
             result = self._maybe_market_fallback(intent, result)
+            self._record_transition(intent, last_status, result)
+            last_status = result.status
         if result.status == "UNKNOWN" and self.adapter is not None:
             result = self._resolve_unknown(intent, result)
+            self._record_transition(intent, last_status, result)
         for hook in self.post_hooks:
             hook(intent, result)
         assert_contract_version(result.contract_version)
@@ -325,6 +341,36 @@ class ExecutionService:
             error_code="RETRY_BUDGET_EXCEEDED",
             error_message=last_error,
         )
+
+    def _record_transition(
+        self, intent: OrderIntent, from_state: str, result: OrderResult
+    ) -> None:
+        if self.audit_recorder is None:
+            return
+        if from_state == result.status:
+            return
+        try:
+            self.audit_recorder(
+                AuditLogEntry(
+                    timestamp_ms=int(time.time() * 1000),
+                    category="execution",
+                    entity_id=intent.correlation_id,
+                    from_state=from_state,
+                    to_state=result.status,
+                    reason_code=result.error_code or "",
+                    reason_message=result.error_message or "",
+                    event_id="",
+                    metadata={
+                        "symbol": intent.symbol,
+                        "side": intent.side,
+                        "order_type": intent.order_type,
+                        "qty": intent.qty,
+                        "exchange_order_id": result.exchange_order_id,
+                    },
+                )
+            )
+        except Exception:
+            return None
 
 
 def _is_terminal_status(status: str, *, include_unknown: bool = True) -> bool:
