@@ -1,6 +1,7 @@
 import tempfile
 
 from hyperliquid.common.pipeline import Pipeline
+from hyperliquid.decision.config import DecisionConfig
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
@@ -16,7 +17,10 @@ def test_ingest_pipeline_writes_intents_and_results() -> None:
     with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
         conn = init_db(tmp.name)
         ingest = IngestService()
-        decision = DecisionService(safety_mode_provider=_safety_mode_provider)
+        decision = DecisionService(
+            config=DecisionConfig(),
+            safety_mode_provider=_safety_mode_provider,
+        )
         execution = ExecutionService()
         pipeline = Pipeline(
             decision=decision,

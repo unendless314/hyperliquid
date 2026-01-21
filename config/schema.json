@@ -172,6 +172,45 @@
         }
       }
     },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_stale_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_future_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replay_policy": {
+          "type": "string",
+          "enum": ["close-only", "allow"]
+        },
+        "price_source": {
+          "type": "string",
+          "enum": ["adapter", "ingest"]
+        },
+        "price_fallback_enabled": {
+          "type": "boolean"
+        },
+        "price_fallback_max_stale_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filters_enabled": {
+          "type": "boolean"
+        },
+        "blacklist_symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "execution": {
       "type": "object",
       "additionalProperties": false,

@@ -9,7 +9,8 @@
 
 ## Inputs
 - PositionDeltaEvent
-- settings: max_stale_ms, replay_policy, binance_filters, sizing config
+- DecisionInputs (local state + providers)
+- settings: max_stale_ms, replay_policy, filters config, sizing config
 
 ## Outputs
 - OrderIntent
@@ -55,3 +56,31 @@ Exposure-increasing intents are blocked only when:
 ## Closable Quantity
 - closable_qty is the local position size available for reduce-only orders.
 - If closable_qty == 0, skip the close intent with a warning.
+
+## DecisionInputs / Local State
+Decision uses local state that is not part of PositionDeltaEvent. To avoid polluting
+event contracts, the decision layer accepts a lightweight DecisionInputs/DecisionContext
+object that includes local position and provider hooks.
+
+Required fields:
+- local_current_position: float (signed net position for the symbol)
+- closable_qty: float (abs size available for reduce-only)
+- safety_mode: str (ARMED_SAFE/HALT/NORMAL)
+
+Provider hooks (for testability):
+- now_ms_provider: Callable[[], int] for freshness checks
+- price_provider: Callable[[str], PriceSnapshot] for mark/mid price + timestamp
+- filters_provider: Callable[[str], SymbolFilters | None] for exchange filters
+
+## Price Source / Fallback
+- Primary price source for slippage checks is the execution adapter mark/mid price.
+- If adapter price is unavailable, fallback to ingest price is allowed only if enabled in config.
+- Fallback prices must pass a stricter staleness threshold and must attach a risk_note.
+
+## Freshness Guard
+- Events are rejected if timestamp is older than max_stale_ms or ahead of now_ms by more than max_future_ms.
+
+## Filters
+- Decision uses a common filter model (min_qty, step_size, min_notional, tick_size).
+- Adapters map exchange-specific filters into the common model.
+- Decision validates intents against the common filters before sizing output is accepted.

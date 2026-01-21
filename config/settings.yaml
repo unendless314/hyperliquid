@@ -33,6 +33,15 @@ ingest:
         prev_target_net_position: 0.0
         next_target_net_position: 0.01
         timestamp_ms: 0
+decision:
+  max_stale_ms: 0
+  max_future_ms: 2000
+  replay_policy: "close-only"
+  price_source: "adapter"
+  price_fallback_enabled: false
+  price_fallback_max_stale_ms: 5000
+  filters_enabled: true
+  blacklist_symbols: []
 execution:
   tif_seconds: 5
   order_poll_interval_sec: 2

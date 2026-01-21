@@ -13,6 +13,7 @@ from hyperliquid.common.models import (
 )
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
+from hyperliquid.decision.config import DecisionConfig
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.adapters.binance import (
     AdapterNotImplementedError,
@@ -168,7 +169,13 @@ class Orchestrator:
             result_provider=persistence.get_order_result,
             safety_state_updater=safety_state_updater,
         )
-        decision_service = DecisionService(safety_mode_provider=safety_mode_provider)
+        decision_config = DecisionConfig.from_settings(self.settings.raw)
+        decision_service = DecisionService(
+            config=decision_config,
+            safety_mode_provider=safety_mode_provider,
+            replay_policy_provider=lambda: decision_config.replay_policy,
+            logger=logger,
+        )
         ingest_service = IngestService()
 
         return {

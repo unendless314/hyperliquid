@@ -76,27 +76,33 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Define execution order models
   - [x] Task: Add safety hook placeholders for pre/post execution checks
   - [x] Task: Add contract version assertion on execution requests/results
+  - [x] Task: Implement TIF + cancel flow (query -> cancel -> re-query)
+  - [x] Task: Implement UNKNOWN recovery + retry budget with safety transitions
+  - [x] Task: Implement market fallback (slippage/min_notional checks, filled_qty merge)
   - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject
 
-- [ ] Story 3.2: Exchange adapter skeleton
+- [~] Story 3.2: Exchange adapter skeleton
   - [x] Task: Implement adapter stubs per docs/INTEGRATIONS.md
-  - [~] Task: Add idempotency + dedup placeholders
-  - [~] Task: Implement REST client base (signing, time sync, retry, rate limit, error mapping)
-  - [~] Task: Implement Binance live adapter (POST /order, GET /order, DELETE /order)
-  - [~] Task: Add duplicate handling (clientOrderId already exists -> query status)
-  - [~] Task: Add symbol normalization specific to Binance (strip '-'/'_')
-  - [~] Task: Add unit tests for mapping/duplicate/symbol normalization
+  - [x] Task: Add idempotency + dedup placeholders
+  - [x] Task: Implement REST client base (signing, time sync, retry, rate limit, error mapping)
+  - [x] Task: Implement Binance live adapter (POST /order, GET /order, DELETE /order)
+  - [x] Task: Add duplicate handling (clientOrderId already exists -> query status)
+  - [x] Task: Add symbol normalization specific to Binance (strip '-'/'_')
+  - [x] Task: Add exchangeInfo filters (min_qty/step_size/min_notional/tick_size) with cache
+  - [x] Task: Add mark price fetch for market notional checks
+  - [x] Task: Add unit tests for mapping/duplicate/symbol normalization
   - Acceptance: Execution flow can be simulated end-to-end
 
 ## Epic 4: Safety + reconciliation
 - [~] Story 4.1: Safety service skeleton
   - [x] Task: Implement safety service interface in src/hyperliquid/safety/service.py
-  - [~] Task: Define reconciliation models and checks
-  - [~] Task: Implement reconcile snapshots (stale snapshot, missing symbol, drift thresholds)
-  - [~] Task: Implement local position aggregation from order_intents + order_results
-  - [~] Task: Add reconcile policy (no auto-promote from ARMED_SAFE by default)
-  - [~] Task: Add safety config fields (warn/critical thresholds, snapshot staleness)
-  - [~] Task: Add reconciliation unit tests
+  - [x] Task: Define reconciliation models and checks
+  - [x] Task: Implement reconcile snapshots (stale snapshot, missing symbol, drift thresholds)
+  - [x] Task: Implement local position aggregation from order_intents + order_results
+  - [x] Task: Add reconcile policy (no auto-promote from ARMED_SAFE by default)
+  - [x] Task: Add safety config fields (warn/critical thresholds, snapshot staleness)
+  - [x] Task: Add reconciliation unit tests
+  - [x] Task: Wire startup + loop reconciliation in orchestrator (HALT on startup failure)
   - Acceptance: Safety service can validate a mock execution state
 
 ## Epic 5: Persistence + audit
@@ -119,38 +125,35 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable
 
-## Handoff Notes (2026/01/18 - end of day)
+## Handoff Notes (2026/01/19)
 
   ### Current Status
 
-  - Execution idempotency: clientOrderId persisted; recovery short-circuits for FILLED/SUBMITTED/UNKNOWN do not invoke post-hooks.
-  - Execution adapter: Binance live REST client implemented (signing, time sync, retry/backoff, rate limit, error mapping).
-  - Binance adapter: POST/GET/DELETE order wired; duplicate clientOrderId triggers query; timeout/network -> UNKNOWN.
-  - Safety reconcile: snapshots handle stale/missing symbols; drift thresholds applied; no auto-promote from ARMED_SAFE by default.
-  - Local positions: derived from order_intents + order_results (filled_qty + side sign); symbol normalization with zero filtering.
-  - DB schema: order_results.contract_version added; DB_SCHEMA_VERSION=2; runbook updated with manual ALTER TABLE.
+  - Execution FSM: TIF + cancel, UNKNOWN recovery + retry budget, and market fallback (slippage + min_notional checks) implemented.
+  - Adapter: Binance REST client supports order submit/query/cancel, positionRisk, exchangeInfo filters, mark price, duplicate handling.
+  - Safety: Startup + loop reconciliation wired in orchestrator; startup reconcile failure forces HALT.
+  - Positions: Local positions normalized with execution symbol rules (strip '-'/'_') for reconcile consistency.
+  - Tests: Added/extended unit coverage for execution recovery, adapter filters, reconcile, and fallback merge logic.
 
   ### Key Files
 
+  - Execution service: src/hyperliquid/execution/service.py
   - Binance adapter: src/hyperliquid/execution/adapters/binance.py
-  - Execution recovery gate: src/hyperliquid/execution/service.py
+  - Orchestrator reconcile wiring: src/hyperliquid/orchestrator/service.py
   - Safety reconcile: src/hyperliquid/safety/reconcile.py
   - Local positions: src/hyperliquid/storage/positions.py
-  - Safety config: config/schema.json, config/settings.yaml
+  - Config/schema: config/settings.yaml, config/schema.json
   - Tests: tests/unit/test_execution_recovery.py, tests/unit/test_binance_adapter.py, tests/unit/test_safety_reconcile.py
-  - Runbook migration: docs/RUNBOOK.md
+  - Docs: docs/modules/EXECUTION.md, docs/RUNBOOK.md
 
-  ### Remaining High‑Priority Work
+  ### Remaining Work
 
-  1. Wire reconciliation into orchestrator loop/startup flow (fetch exchange positions, call reconcile, update safety state).
-  2. Implement Binance exchange position fetch (GET /fapi/v2/positionRisk) for reconcile.
-  3. Implement symbol mapping/precision filters (exchangeInfo) before live orders.
-  4. Execution FSM enhancements: time-in-force, fallback, cancel flow, retry budgets.
-  5. Audit log entries for key state changes.
-  6. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
+  1. Decision constraints per docs/modules/DECISION.md (sizing + risk checks).
+  2. Audit log entries for key state changes (execution + safety transitions).
+  3. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
+  4. Ops validation checklist in docs/RUNBOOK.md (manual verification).
 
   ### Notes / Risks
 
-  - Binance symbol normalization strips '-'/'_' in adapter; ensure mapping is explicit when integrating exchangeInfo.
-  - Stale snapshot -> ARMED_SAFE; missing symbol -> HALT (after zero-filter).
-  - Retry/backoff uses urllib; no external HTTP client dependency.
+  - Fallback merges filled_qty and avg_price; avg_price preserved if fallback lacks price.
+  - Retry budget exhaustion triggers safety state via EXECUTION_RETRY_BUDGET_EXCEEDED.

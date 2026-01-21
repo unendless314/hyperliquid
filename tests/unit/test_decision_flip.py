@@ -1,3 +1,4 @@
+from hyperliquid.decision.config import DecisionConfig
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.common.models import PositionDeltaEvent
 
@@ -23,7 +24,10 @@ def _flip_event() -> PositionDeltaEvent:
 
 
 def test_flip_generates_distinct_intents() -> None:
-    service = DecisionService(safety_mode_provider=_safety_mode_provider("ARMED_LIVE"))
+    service = DecisionService(
+        config=DecisionConfig(),
+        safety_mode_provider=_safety_mode_provider("ARMED_LIVE"),
+    )
     intents = service.decide(_flip_event())
 
     assert len(intents) == 2
@@ -33,7 +37,10 @@ def test_flip_generates_distinct_intents() -> None:
 
 
 def test_flip_in_armed_safe_keeps_reduce_only() -> None:
-    service = DecisionService(safety_mode_provider=_safety_mode_provider("ARMED_SAFE"))
+    service = DecisionService(
+        config=DecisionConfig(),
+        safety_mode_provider=_safety_mode_provider("ARMED_SAFE"),
+    )
     intents = service.decide(_flip_event())
 
     assert len(intents) == 1

@@ -1,4 +1,5 @@
 from hyperliquid.common.pipeline import Pipeline
+from hyperliquid.decision.config import DecisionConfig
 from hyperliquid.decision.service import DecisionService
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.ingest.service import IngestService
@@ -11,7 +12,10 @@ def _safety_mode_provider() -> str:
 
 def test_pipeline_records_intents_and_results() -> None:
     ingest = IngestService()
-    decision = DecisionService(safety_mode_provider=_safety_mode_provider)
+    decision = DecisionService(
+        config=DecisionConfig(),
+        safety_mode_provider=_safety_mode_provider,
+    )
     execution = ExecutionService()
     persistence = InMemoryPersistence()
 
