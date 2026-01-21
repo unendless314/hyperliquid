@@ -133,3 +133,5 @@ kelly_params_missing.
 - Decision uses a common filter model (min_qty, step_size, min_notional, tick_size).
 - Adapters map exchange-specific filters into the common model.
 - Decision validates intents against the common filters before sizing output is accepted.
+- No rounding is performed: if qty/price is not a clean multiple of step_size/tick_size,
+  the intent is rejected.

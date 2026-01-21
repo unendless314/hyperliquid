@@ -33,6 +33,13 @@
 - Unknown status is resolved via Reconciliation
 - Order results persist contract_version for recovery verification.
 
+## Filters
+- Execution validates intents against SymbolFilters (min_qty, step_size, min_notional, tick_size).
+- No rounding is performed: if qty/price is not a clean multiple of step_size/tick_size,
+  the order is rejected.
+- If exchange_info_enabled=false, filter validation is skipped.
+- If exchange_info_enabled=true but filters are missing, the order is rejected.
+
 ## Idempotency and clientOrderId
 - Format: hl-{tx_hash}-{event_index}-{symbol}-{nonce}
 - symbol must be normalized (replace '-' with '_')

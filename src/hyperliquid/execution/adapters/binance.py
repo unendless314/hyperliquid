@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from hyperliquid.common.filters import SymbolFilters
+from hyperliquid.common.filters import SymbolFilters, validate_intent_filters
 from hyperliquid.common.idempotency import sanitize_client_order_id
 from hyperliquid.common.models import (
     OrderIntent,
@@ -596,6 +596,15 @@ def _parse_exchange_info(payload: dict) -> dict[str, BinanceSymbolFilters]:
     return parsed
 
 
+def _symbol_filters_from_binance(filters: BinanceSymbolFilters) -> SymbolFilters:
+    return SymbolFilters(
+        min_qty=float(filters.min_qty),
+        step_size=float(filters.step_size),
+        min_notional=float(filters.min_notional),
+        tick_size=float(filters.tick_size),
+    )
+
+
 def _decimal_from(value) -> Decimal:
     if value in (None, ""):
         return Decimal("0")
@@ -618,18 +627,11 @@ def _validate_intent_filters(
     symbol_filters = filters.get(symbol_key)
     if symbol_filters is None:
         raise ValueError(f"missing_symbol_filters:{symbol_key}")
-    qty = _decimal_from(intent.qty)
-    if symbol_filters.min_qty > 0 and qty < symbol_filters.min_qty:
-        raise ValueError("qty_below_min_qty")
-    if not _is_multiple(qty, symbol_filters.step_size):
-        raise ValueError("qty_step_size_violation")
-    if intent.price is None:
-        return
-    price = _decimal_from(intent.price)
-    if not _is_multiple(price, symbol_filters.tick_size):
-        raise ValueError("price_tick_size_violation")
-    if symbol_filters.min_notional > 0 and (price * qty) < symbol_filters.min_notional:
-        raise ValueError("min_notional_violation")
+    validate_intent_filters(
+        intent,
+        _symbol_filters_from_binance(symbol_filters),
+        price_override=intent.price,
+    )
 
 
 def _validate_market_notional(
@@ -651,9 +653,10 @@ def _is_filter_error(exc: ValueError) -> bool:
     message = str(exc)
     return message in {
         "exchange_info_missing_filters",
-        "qty_below_min_qty",
-        "qty_step_size_violation",
-        "price_tick_size_violation",
+        "filter_min_qty",
+        "filter_step_size",
+        "filter_tick_size",
+        "filter_min_notional",
         "min_notional_violation",
         "mark_price_unavailable",
     } or message.startswith("missing_symbol_filters:")

@@ -154,7 +154,7 @@ def test_validate_intent_filters_min_qty() -> None:
         binance._validate_intent_filters(intent, filters)
         assert False, "expected min qty violation"
     except ValueError as exc:
-        assert "qty_below_min_qty" in str(exc)
+        assert "filter_min_qty" in str(exc)
 
 
 def test_validate_market_notional_uses_safety_factor() -> None:
