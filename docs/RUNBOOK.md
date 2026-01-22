@@ -21,6 +21,28 @@ Verification:
 - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
 - tail -n 50 <metrics_log_path>
 
+### Scripted Preflight (Recommended)
+Copy/paste sequence:
+- python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
+- python tools/hash_config.py --config config/settings.yaml
+- python - <<'PY'
+from pathlib import Path
+from hyperliquid.common.settings import load_settings
+from hyperliquid.storage.db import init_db, assert_schema_version
+settings = load_settings(Path("config/settings.yaml"), Path("config/schema.json"))
+conn = init_db(settings.db_path)
+assert_schema_version(conn)
+conn.close()
+print("preflight_ok")
+PY
+
+### Scripted Post-Start Checks (Recommended)
+Copy/paste sequence:
+- sqlite3 <db_path> "select key, value from system_state where key in ('safety_mode','safety_reason_code','safety_reason_message');"
+- sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
+- sqlite3 <db_path> "select count(*) from audit_log;"
+- tail -n 50 <metrics_log_path>
+
 ## Incident Response
 
 ### 1) Entered ARMED_SAFE
@@ -55,12 +77,24 @@ Maintenance restart:
 - Manually promote to ARMED_LIVE after verifying positions.
 - Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
 
-### 3) Repeated Order Failures
+### 4) Repeated Order Failures
 Checklist:
 - Inspect error_code and error_message in order_results
 - Check rate limit logs and backoff state
 - Verify API keys and permissions
 - Check exchange status
+
+### Rollback Triggers (Operational)
+Initiate rollback or disable trading when any of the following are observed:
+- system_state.safety_mode == HALT (reason_code indicates critical fault)
+- system_state.safety_reason_code in
+  - SCHEMA_VERSION_MISMATCH
+  - EXECUTION_ADAPTER_NOT_IMPLEMENTED
+  - EXECUTION_RETRY_BUDGET_EXCEEDED
+  - RECONCILE_CRITICAL
+  - BACKFILL_WINDOW_EXCEEDED
+- audit_log shows repeated execution transitions to UNKNOWN with error_code=RATE_LIMITED
+  or TIMEOUT over a short window (rate limit outage or connectivity issue)
 
 ## Recovery Procedures
 
@@ -84,8 +118,23 @@ Checklist:
 - Verify restore by reading system_state
 
 ### Schema Updates
-- Apply migration scripts manually during MVP
-- Verify schema version and system_state
-- DB_SCHEMA_VERSION=2 adds order_results.contract_version (TEXT NOT NULL).
-  - For existing DBs: `ALTER TABLE order_results ADD COLUMN contract_version TEXT NOT NULL DEFAULT '1.0';`
-  - Update system_state.schema_version to "2" after migration.
+- Apply migration scripts manually during MVP (preferred: rebuild DB if possible).
+- Verify schema version and system_state.
+- DB_SCHEMA_VERSION=3 adds audit_log (and requires order_results.contract_version).
+- If rebuilding:
+  1. Stop the service.
+  2. Backup existing DB: `cp <db_path> <db_path>.bak-YYYYMMDD-HHMM`
+  3. Recreate empty DB:
+     - python - <<'PY'
+from pathlib import Path
+from hyperliquid.common.settings import load_settings
+from hyperliquid.storage.db import init_db, assert_schema_version
+settings = load_settings(Path("config/settings.yaml"), Path("config/schema.json"))
+conn = init_db(settings.db_path)
+assert_schema_version(conn)
+conn.close()
+print("db_rebuilt")
+PY
+  4. Post-check:
+     - sqlite3 <db_path> "select value from system_state where key='schema_version';"
+     - sqlite3 <db_path> "select count(*) from audit_log;"

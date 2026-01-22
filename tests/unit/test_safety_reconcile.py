@@ -1,49 +1,45 @@
 from __future__ import annotations
 
-import tempfile
 import time
 
 from hyperliquid.common.models import OrderIntent, OrderResult
 from hyperliquid.safety.reconcile import PositionSnapshot, reconcile_snapshots
 from hyperliquid.safety.service import SafetyService
-from hyperliquid.storage.db import init_db
 from hyperliquid.storage.persistence import DbPersistence
 from hyperliquid.storage.positions import load_local_positions_from_orders
 from hyperliquid.storage.safety import SafetyState
 
 
-def test_load_local_positions_from_orders() -> None:
-    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
-        conn = init_db(tmp.name)
-        persistence = DbPersistence(conn)
+def test_load_local_positions_from_orders(db_conn) -> None:
+    persistence = DbPersistence(db_conn)
 
-        intent = OrderIntent(
-            correlation_id="hl-abc-10-BTCUSDT",
-            client_order_id=None,
-            symbol="BTCUSDT",
-            side="BUY",
-            order_type="MARKET",
-            qty=1.0,
-            price=None,
-            reduce_only=0,
-            time_in_force="IOC",
-            is_replay=0,
-            risk_notes=None,
-        )
-        persistence.ensure_intent(intent)
-        result = OrderResult(
-            correlation_id=intent.correlation_id,
-            exchange_order_id="ex-1",
-            status="FILLED",
-            filled_qty=1.0,
-            avg_price=100.0,
-            error_code=None,
-            error_message=None,
-        )
-        persistence.record_result(result)
+    intent = OrderIntent(
+        correlation_id="hl-abc-10-BTCUSDT",
+        client_order_id=None,
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="MARKET",
+        qty=1.0,
+        price=None,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    persistence.ensure_intent(intent)
+    result = OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-1",
+        status="FILLED",
+        filled_qty=1.0,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    persistence.record_result(result)
 
-        positions = load_local_positions_from_orders(conn)
-        assert positions["BTCUSDT"] == 1.0
+    positions = load_local_positions_from_orders(db_conn)
+    assert positions["BTCUSDT"] == 1.0
 
 
 def test_reconcile_snapshot_stale() -> None:

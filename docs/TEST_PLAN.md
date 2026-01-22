@@ -72,8 +72,8 @@ Expected:
 - tests/unit/test_dedup_logic.py (TODO)
 
 ## Integration Tests
-- tests/integration/test_binance_submit_cancel.py (TODO)
-- tests/integration/test_ws_backfill.py (TODO)
+- tests/integration/test_binance_submit_cancel.py (rate limit, timeout, duplicate handling)
+- tests/integration/test_ws_backfill.py (reconcile path: missing symbol -> HALT)
 
 ## Chaos Tests
 - tests/chaos/test_network_errors.py (TODO)

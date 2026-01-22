@@ -1,8 +1,5 @@
-import tempfile
-
 from hyperliquid.common.models import OrderIntent, OrderResult
 from hyperliquid.execution.service import ExecutionService
-from hyperliquid.storage.db import init_db
 from hyperliquid.storage.persistence import DbPersistence
 from hyperliquid.storage.safety import set_safety_state
 
@@ -36,44 +33,40 @@ def _intent() -> OrderIntent:
     )
 
 
-def test_audit_log_execution_transition_written_once() -> None:
-    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
-        conn = init_db(tmp.name)
-        persistence = DbPersistence(conn)
-        service = ExecutionService(
-            adapter=_StubAdapter(),
-            audit_recorder=persistence.record_audit,
-        )
-        result = service.execute(_intent())
-        assert result.status == "SUBMITTED"
-        row = conn.execute("SELECT count(*) FROM audit_log").fetchone()
-        assert row is not None and row[0] == 1
-        entry = conn.execute(
-            "SELECT category, entity_id, from_state, to_state FROM audit_log"
-        ).fetchone()
-        assert entry == ("execution", "hl-abc-1-BTCUSDT", "NONE", "SUBMITTED")
+def test_audit_log_execution_transition_written_once(db_conn) -> None:
+    persistence = DbPersistence(db_conn)
+    service = ExecutionService(
+        adapter=_StubAdapter(),
+        audit_recorder=persistence.record_audit,
+    )
+    result = service.execute(_intent())
+    assert result.status == "SUBMITTED"
+    row = db_conn.execute("SELECT count(*) FROM audit_log").fetchone()
+    assert row is not None and row[0] == 1
+    entry = db_conn.execute(
+        "SELECT category, entity_id, from_state, to_state FROM audit_log"
+    ).fetchone()
+    assert entry == ("execution", "hl-abc-1-BTCUSDT", "NONE", "SUBMITTED")
 
 
-def test_audit_log_safety_transition_writes_only_on_change() -> None:
-    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
-        conn = init_db(tmp.name)
-        persistence = DbPersistence(conn)
-        set_safety_state(
-            conn,
-            mode="ARMED_SAFE",
-            reason_code="BOOT",
-            reason_message="boot",
-            audit_recorder=persistence.record_audit,
-        )
-        set_safety_state(
-            conn,
-            mode="ARMED_SAFE",
-            reason_code="BOOT",
-            reason_message="boot",
-            audit_recorder=persistence.record_audit,
-        )
-        row = conn.execute("SELECT count(*) FROM audit_log").fetchone()
-        assert row is not None and row[0] == 1
+def test_audit_log_safety_transition_writes_only_on_change(db_conn) -> None:
+    persistence = DbPersistence(db_conn)
+    set_safety_state(
+        db_conn,
+        mode="ARMED_SAFE",
+        reason_code="BOOT",
+        reason_message="boot",
+        audit_recorder=persistence.record_audit,
+    )
+    set_safety_state(
+        db_conn,
+        mode="ARMED_SAFE",
+        reason_code="BOOT",
+        reason_message="boot",
+        audit_recorder=persistence.record_audit,
+    )
+    row = db_conn.execute("SELECT count(*) FROM audit_log").fetchone()
+    assert row is not None and row[0] == 1
 
 
 def test_audit_log_failure_does_not_block_execution() -> None:
