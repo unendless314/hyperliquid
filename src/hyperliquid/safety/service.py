@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Optional
 
-from hyperliquid.common.models import OrderIntent
+from hyperliquid.common.models import OrderIntent, OrderResult
 from hyperliquid.safety.reconcile import (
     DriftReport,
     PositionSnapshot,
@@ -29,8 +29,8 @@ class SafetyService:
         if mode == "ARMED_SAFE" and intent.reduce_only == 0:
             raise RuntimeError("ARMED_SAFE_BLOCK_INCREASE")
 
-    def post_execution_check(self, intent: OrderIntent) -> None:
-        _ = intent
+    def post_execution_check(self, intent: OrderIntent, result: Optional[OrderResult] = None) -> None:
+        _ = (intent, result)
         return None
 
     def reconcile_positions(
