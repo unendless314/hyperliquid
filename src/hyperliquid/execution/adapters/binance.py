@@ -293,6 +293,11 @@ class BinanceExecutionAdapter:
             positions[key] = positions.get(key, 0.0) + position_amt
         if latest_update_ms is None:
             latest_update_ms = 0
+        if latest_update_ms == 0:
+            try:
+                latest_update_ms = self._client._current_timestamp_ms()
+            except Exception:
+                latest_update_ms = int(time.time() * 1000)
         return positions, latest_update_ms
 
     def fetch_mark_price(self, symbol: str) -> Decimal:

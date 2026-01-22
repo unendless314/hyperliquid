@@ -1,6 +1,6 @@
 config_version: "0.1"
 environment: "local"
-db_path: "data/hyperliquid.db"
+db_path: "data/hyperliquid_testnet.db"
 metrics_log_path: "logs/metrics.log"
 app_log_path: "logs/app.log"
 log_level: "INFO"
@@ -9,10 +9,10 @@ ingest:
   backfill_window_ms: 600000
   cursor_overlap_ms: 5000
   hyperliquid:
-    enabled: false
-    mode: "stub"
+    enabled: true
+    mode: "live"
     rest_url: "https://api.hyperliquid.xyz/info"
-    ws_url: ""
+    ws_url: "wss://api.hyperliquid.xyz/ws"
     request_timeout_ms: 10000
     symbol_map:
       BTC: "BTCUSDT"
@@ -64,9 +64,9 @@ execution:
   market_fallback_threshold_pct: 0.1
   market_slippage_cap_pct: 0.005
   binance:
-    enabled: false
-    mode: "stub"
-    base_url: "https://fapi.binance.com"
+    enabled: true
+    mode: "live"
+    base_url: "https://testnet.binancefuture.com"
     request_timeout_ms: 10000
     recv_window_ms: 5000
     exchange_info_enabled: true

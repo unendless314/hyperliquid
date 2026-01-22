@@ -53,6 +53,21 @@ Example values below are placeholders; replace them for each run.
   - order_results_count=0
   - audit_log_count=0
 
+### A2 Live Testnet Evidence (2026-01-22)
+- mode: live
+- db_path: data/hyperliquid_testnet_a2b.db
+- system_state (safety_*):
+  - safety_mode|ARMED_LIVE
+  - safety_reason_code|OK
+  - safety_reason_message|Drift within thresholds
+- last_processed_event_key:
+  - 1765597613825|302525198149075|0x8dd60f1afdda1bc88f4f0431485e0302016e000098dd3a9a319eba6dbcddf5b3|BTCUSDT
+- order_results_count: 0
+- audit_log_count: 1
+- metrics_tail highlights:
+  - reconcile_max_drift (mode=ARMED_LIVE, reason=OK)
+  - cursor_lag_ms=0
+
 ## A3 Failure Path Evidence
 For each failure path, capture:
 - Trigger steps used:

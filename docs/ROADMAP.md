@@ -65,7 +65,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add contract version assertion on decision inputs/outputs
   - [x] Task: Add replay policy gate (close-only)
   - [x] Task: Wire expected_price from ingest events into DecisionInputs (slippage checks)
-  - Acceptance: Decision service returns deterministic placeholder actions
+  - Acceptance: Decision service returns deterministic placeholder actions (strategy rules/versioning not implemented yet)
 
 - [x] Story 2.2: Strategy constraints
   - [x] Task: Implement sizing/risk constraints per docs/modules/DECISION.md
@@ -80,7 +80,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Implement TIF + cancel flow (query -> cancel -> re-query)
   - [x] Task: Implement UNKNOWN recovery + retry budget with safety transitions
   - [x] Task: Implement market fallback (slippage/min_notional checks, filled_qty merge)
-  - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject
+  - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject (no production live trading validation yet)
 
 - [~] Story 3.2: Exchange adapter skeleton
   - [x] Task: Implement adapter stubs per docs/INTEGRATIONS.md
@@ -92,7 +92,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add exchangeInfo filters (min_qty/step_size/min_notional/tick_size) with cache
   - [x] Task: Add mark price fetch for market notional checks
   - [x] Task: Add unit tests for mapping/duplicate/symbol normalization
-  - Acceptance: Execution flow can be simulated end-to-end
+  - Acceptance: Execution flow can be simulated end-to-end (testnet ops validation only; no production validation yet)
 
 ## Epic 4: Safety + reconciliation
 - [~] Story 4.1: Safety service skeleton
@@ -116,40 +116,44 @@ see the technical docs referenced in docs/README.md.
 
 ## Epic 6: Testing + runbook alignment
 - [~] Story 6.1: Test scaffolding
-  - [~] Task: Add tests listed in docs/TEST_PLAN.md TODOs (partial)
+  - [~] Task: Add tests listed in docs/TEST_PLAN.md TODOs (partial; added integration coverage for WS reconnect/backfill, dedup, retry budget, safety gating, partial fills, snapshot stale, drift thresholds; added unit tests for hook signatures and ops validation)
   - [x] Task: Add minimal unit tests for settings + DB init (added multiple unit tests)
   - [x] Task: Add unit tests for execution recovery + binance adapter mapping
   - [x] Task: Add unit tests for safety reconcile flow
+  - [x] Task: Run key integration set and record results (2026-01-22)
   - Acceptance: Tests pass locally per docs/TEST_PLAN.md
 
 - [ ] Story 6.2: Ops validation
+  - [x] Task: A2 live testnet validation evidence recorded (2026-01-22)
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
-  - Acceptance: Manual ops checklist is executable
+  - Acceptance: Manual ops checklist is executable (full ops checklist not completed yet)
 
 ## Handoff Notes (2026/01/22)
 
-  ### Current Status
+  ### Summary
 
-  - Decision constraints implemented (freshness, replay policy wiring, risk checks, sizing, slippage with expected/reference).
-  - Common filters shared across Decision and Execution (no rounding; reject on non-multiples).
-  - Audit log persisted to SQLite (audit_log table) for execution/safety transitions.
+  - Completed Story 6.1 key integration set; all pass (see docs/TEST_PLAN.md "Key Integration Set (2026-01-22)").
+  - Completed Story 6.2 A2 live testnet ops validation; evidence saved at docs/ops_validation_run.txt.
+  - Implemented ops validation automation: tools/ops_validate_run.py (read-only DB check by default; --allow-create-db for first bootstrap).
+  - Fixed Binance empty-position snapshot timestamp handling (updateTime=0 now uses current timestamp to avoid SNAPSHOT_STALE).
 
-  ### Key Files
+  ### Current Config State
 
-  - Decision service: src/hyperliquid/decision/service.py
-  - Decision config/reasons: src/hyperliquid/decision/config.py, src/hyperliquid/decision/reasons.py
-  - Common filters: src/hyperliquid/common/filters.py
-  - Execution service: src/hyperliquid/execution/service.py
-  - Audit log persistence: src/hyperliquid/storage/persistence.py, src/hyperliquid/storage/db.py
-  - Safety state audit hook: src/hyperliquid/storage/safety.py
-  - Tests: tests/unit/test_decision_slippage.py, tests/unit/test_filters.py, tests/unit/test_audit_log.py
-  - Docs: docs/modules/DECISION.md, docs/modules/EXECUTION.md, docs/DATA_MODEL.md
+  - config/settings.yaml reverted: safety.startup_policy=manual, db_path=data/hyperliquid_testnet.db.
+  - Testnet endpoints enabled (execution.binance.enabled=true + base_url testnet; ingest.hyperliquid.enabled=true + live).
+  - .env contains testnet API keys + HYPERLIQUID_TARGET_WALLET (not committed).
 
-  ### Remaining Work
+  ### Evidence & Logs
 
-  1. Complete A2 live testnet ops validation (aim for non-stale reconcile → ARMED_LIVE) and small-order validation.
-  2. Decide on additional chaos/backfill edge cases (e.g., WS reconnect, backfill overlap) before production.
+  - A2 live ops evidence: docs/ops_validation_run.txt (ARMED_LIVE / OK with fresh DB).
+  - Key integration set results recorded in docs/TEST_PLAN.md.
+
+  ### Remaining Work (next milestone)
+
+  1. Decide on additional chaos/backfill edge cases and implement remaining chaos tests in docs/TEST_PLAN.md.
+  2. Strategy engine still placeholder (Story 2.1 → real strategy rules + versioning).
   3. Formalize Go/No-Go checklist for production (monitoring, alerting, rollback rehearsal).
+  4. Optional: address pytest-asyncio warning (loop scope default).
 
   ### Notes / Risks
 

@@ -98,11 +98,31 @@ Expected:
 - tests/unit/test_cursor_dedup_persistence.py (TODO)
 - tests/unit/test_unknown_recovery.py (TODO)
 - tests/unit/test_safety_promotion_conditions.py (TODO)
+- tests/unit/test_hook_signatures.py
+- tests/unit/test_ops_validate_run.py
 
 ## Integration Tests
 - tests/integration/test_binance_submit_cancel.py (rate limit, timeout, duplicate handling)
 - tests/integration/test_ws_backfill.py (reconcile path: missing symbol -> HALT)
 - tests/integration/test_ws_reconnect.py (disconnect + resume + backfill overlap) (TODO)
+- tests/integration/test_ws_reconnect_backfill.py
+- tests/integration/test_ingest_pipeline_dedup.py
+- tests/integration/test_execution_retry_budget.py
+- tests/integration/test_safety_mode_gating.py
+- tests/integration/test_partial_fill_handling.py
+- tests/integration/test_reconcile_snapshot_stale.py
+- tests/integration/test_reconcile_drift_thresholds.py
+
+### Key Integration Set (2026-01-22)
+Status: pass (10 tests)
+Included:
+- tests/integration/test_ws_reconnect_backfill.py
+- tests/integration/test_ingest_pipeline_dedup.py
+- tests/integration/test_execution_retry_budget.py
+- tests/integration/test_safety_mode_gating.py
+- tests/integration/test_partial_fill_handling.py
+- tests/integration/test_reconcile_snapshot_stale.py
+- tests/integration/test_reconcile_drift_thresholds.py
 
 ## Chaos Tests
 - tests/chaos/test_network_errors.py (TODO)
