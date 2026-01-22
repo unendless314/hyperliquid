@@ -7,15 +7,23 @@ Prerequisites:
 - config_hash computed and recorded
 - API keys/target wallet available for selected environment (loaded via env vars)
 - Time sync offset computed
-- Missing required env vars in live mode will raise a startup error (not a safety-state transition).
+- Missing required env vars in live mode will raise a startup error (not a safety-state transition). Current checks are enforced in:
+  - src/hyperliquid/ingest/adapters/hyperliquid.py (HYPERLIQUID_TARGET_WALLET required for ingest live mode)
+  - src/hyperliquid/execution/adapters/binance.py (BINANCE_API_KEY/BINANCE_API_SECRET required for execution live mode)
 
 Steps:
 1. Validate config:
    - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
+   - Expected: exit code 0, no schema errors printed.
+   - Failure/rollback: stop and fix config/settings.yaml (do not start service).
 2. Compute config_hash:
    - python tools/hash_config.py --config config/settings.yaml
+   - Expected: prints config_hash value (record it).
+   - Failure/rollback: stop and fix config/settings.yaml or hash tool errors.
 3. Start service (environment is selected by config/settings.yaml):
    - python src/hyperliquid/main.py --mode live --config config/settings.yaml
+   - Expected: startup completes without HALT; safety_mode is ARMED_SAFE or ARMED_LIVE per config.
+   - Failure/rollback: stop process, inspect logs, revert config/settings.yaml if needed, and restart after correction.
 
 Verification:
 - sqlite3 <db_path> "select key, value from system_state where key like 'safety_%';"
@@ -54,6 +62,12 @@ assert_schema_version(conn)
 conn.close()
 print("preflight_ok")
 PY
+Expected:
+- "preflight_ok" printed.
+- Time sync offset noted (local vs exchange time).
+- No missing env vars (wc -c outputs > 1).
+Failure/rollback:
+- Do not start service; fix config/env/time sync before proceeding.
 
 ### Scripted Post-Start Checks (Recommended)
 Copy/paste sequence:
@@ -62,6 +76,12 @@ Copy/paste sequence:
 - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
 - sqlite3 <db_path> "select count(*) from audit_log;"
 - tail -n 50 <metrics_log_path>
+Expected:
+- safety_mode populated in system_state.
+- last_processed_* keys present after ingest starts.
+- audit_log count increases over time.
+Failure/rollback:
+- Stop process and investigate logs/metrics; do not continue to live validation.
 
 ### Mode-Specific Validation (Recommended)
 Dry-run:
@@ -72,11 +92,15 @@ Dry-run:
 Live:
 - Expect execution adapter enabled and safety_mode != HALT after startup.
 - sqlite3 <db_path> "select value from system_state where key='safety_mode';"
+Failure/rollback:
+- If safety_mode == HALT, stop process and follow incident response.
 
 Backfill-only:
 - Expect cursor advances and no external order placement (adapter disabled).
 - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
 - sqlite3 <db_path> "select count(*) from order_results;"
+Failure/rollback:
+- If cursor does not advance or safety_mode == HALT, stop process and follow incident response.
 
 ## Incident Response
 

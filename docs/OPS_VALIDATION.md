@@ -2,6 +2,7 @@
 
 Use this template to capture minimal, replayable proof for A1–A3 runs.
 Keep each run short and attach only the essential outputs.
+Example values below are placeholders; replace them for each run.
 
 ## Run Metadata
 - Date/Time (UTC): 2026-01-22

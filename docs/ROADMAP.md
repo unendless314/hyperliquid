@@ -147,8 +147,8 @@ see the technical docs referenced in docs/README.md.
 
   ### Remaining Work
 
-  1. Live testnet verification with non-stale reconcile (ARMED_LIVE) and small-order validation.
-  2. Decide whether to add more chaos tests or backfill edge cases before production.
+  1. Complete A2 live testnet ops validation (aim for non-stale reconcile → ARMED_LIVE) and small-order validation.
+  2. Decide on additional chaos/backfill edge cases (e.g., WS reconnect, backfill overlap) before production.
   3. Formalize Go/No-Go checklist for production (monitoring, alerting, rollback rehearsal).
 
   ### Notes / Risks

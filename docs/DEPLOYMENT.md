@@ -58,6 +58,32 @@ must be implemented before release.
   - app_log_path
   - tail -n 50 <app_log_path>
 
+## Ops Tracking Record (MVP)
+Record each ops validation run (local/staging/prod) in a simple log file or ticket.
+Minimum fields:
+- date_utc
+- operator
+- environment
+- mode (live/dry-run/backfill-only)
+- config_hash
+- config_version
+- db_schema_version
+- result (pass/fail)
+- notes (e.g., failure reason, rollback performed)
+
+Template:
+```
+date_utc:
+operator:
+environment:
+mode:
+config_hash:
+config_version:
+db_schema_version:
+result:
+notes:
+```
+
 ## Rollback
 - Stop process
 - Restore previous config/settings.yaml

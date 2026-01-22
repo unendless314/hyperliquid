@@ -6,10 +6,10 @@
 Goal: validate backfill + dedup + cursor advancement.
 
 Steps:
-1. Start system in backfill-only mode.
+1. Start system in live or dry-run mode (WS enabled).
 2. Trigger a WS disconnect:
    - Option A: temporarily disable network for the process
-   - Option B: use a test flag to close WS connection
+   - Option B: use mock/patch or a controlled WS proxy to close the connection
 3. Restore network and allow REST backfill to run.
 
 Checks (copy/paste):
@@ -24,7 +24,7 @@ Notes:
 Expected:
 - Cursor advances only after persistence.
 - Dedup drops overlap events (dedup_drop_count increases).
-- No duplicate OrderIntent generated.
+- No duplicate correlation_id in order_intents (if order_intents are generated).
 
 ### 2) Restart Recovery
 Goal: ensure restart is idempotent.
@@ -66,18 +66,58 @@ Expected:
 - No automatic downgrade to ARMED_SAFE.
 - Subsequent INCREASE intents are allowed.
 
+### 4) A2 Live Testnet Validation (Small-Order)
+Goal: validate live testnet flow with explicit, repeatable thresholds.
+
+Parameters (record in evidence log before running):
+- min_notional: <exchange_min_notional>
+- slippage_cap_pct: <config_slippage_cap_pct>
+- allowed_fill_deviation_pct: <manual_threshold_max_fill_deviation_pct>
+
+Steps:
+1. Start in live mode on testnet.
+2. Place a single small order at or above min_notional.
+3. Confirm order_result status and filled_qty.
+4. Verify reconcile is non-stale and safety_mode can reach ARMED_LIVE (if enabled).
+
+Checks (copy/paste):
+- sqlite3 <db_path> "select key, value from system_state where key='safety_mode';"
+- sqlite3 <db_path> "select status, filled_qty, error_code from order_results order by updated_at_ms desc limit 3;"
+- tail -n 50 <metrics_log_path> | grep "reconcile"
+
+Expected:
+- Order status is FILLED or PARTIALLY_FILLED within allowed_fill_deviation_pct.
+- No slippage violation beyond slippage_cap_pct.
+- safety_mode is ARMED_SAFE or ARMED_LIVE (per config) and not HALT.
+
 ## Unit Tests
 - tests/unit/test_config_validation.py (TODO)
 - tests/unit/test_sizing_logic.py (TODO)
 - tests/unit/test_dedup_logic.py (TODO)
+- tests/unit/test_backfill_overlap.py (TODO)
+- tests/unit/test_cursor_dedup_persistence.py (TODO)
+- tests/unit/test_unknown_recovery.py (TODO)
+- tests/unit/test_safety_promotion_conditions.py (TODO)
 
 ## Integration Tests
 - tests/integration/test_binance_submit_cancel.py (rate limit, timeout, duplicate handling)
 - tests/integration/test_ws_backfill.py (reconcile path: missing symbol -> HALT)
+- tests/integration/test_ws_reconnect.py (disconnect + resume + backfill overlap) (TODO)
 
 ## Chaos Tests
 - tests/chaos/test_network_errors.py (TODO)
 - tests/chaos/test_rate_limit_429.py (TODO)
+- tests/chaos/test_partial_fills.py (TODO)
+- tests/chaos/test_delayed_reports.py (TODO)
+
+## Failure Taxonomy (for Chaos/Backfill)
+Use these categories to decide coverage and expected recovery behavior:
+- network interruption (WS disconnect, REST timeout)
+- duplicate events (replay / backfill overlap)
+- partial fills (position drift vs expected)
+- delayed reports (late fills / stale snapshots)
+- price dislocation (sudden mark/reference gaps)
+- unknown order state (query failures, retry budget)
 
 ## Ops Validation
 Reference: docs/RUNBOOK.md (use the scripted preflight/post-start commands).
