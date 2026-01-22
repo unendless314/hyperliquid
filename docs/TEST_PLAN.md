@@ -81,6 +81,7 @@ Expected:
 
 ## Ops Validation
 Reference: docs/RUNBOOK.md (use the scripted preflight/post-start commands).
+Evidence log template: docs/OPS_VALIDATION.md
 
 Checklist:
 - Validate config + schema + config_hash.

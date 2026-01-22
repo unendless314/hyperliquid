@@ -59,6 +59,7 @@ Copy/paste sequence:
 Dry-run:
 - Expect no external order placement (adapter disabled). order_results may be written by local execution flow.
 - sqlite3 <db_path> "select count(*) from order_results;"
+- Note: emit_boot_event (default True) can create a row in order_results on startup.
 
 Live:
 - Expect execution adapter enabled and safety_mode != HALT after startup.
