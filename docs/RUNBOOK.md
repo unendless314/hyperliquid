@@ -24,6 +24,7 @@ Verification:
 
 ### Scripted Preflight (Recommended)
 Copy/paste sequence:
+- PYTHONPATH=src python3 tools/ops_preflight.py --config config/settings.yaml --schema config/schema.json --exchange-time
 - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
 - python tools/hash_config.py --config config/settings.yaml
 - Ensure env vars are set (no output means unset):
@@ -56,6 +57,7 @@ PY
 
 ### Scripted Post-Start Checks (Recommended)
 Copy/paste sequence:
+- PYTHONPATH=src python3 tools/ops_poststart.py --config config/settings.yaml --schema config/schema.json --metrics-tail 5
 - sqlite3 <db_path> "select key, value from system_state where key in ('safety_mode','safety_reason_code','safety_reason_message');"
 - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
 - sqlite3 <db_path> "select count(*) from audit_log;"
@@ -176,6 +178,7 @@ Initiate rollback or disable trading when any of the following are observed:
 - If rebuilding:
   1. Stop the service.
   2. Backup existing DB: `cp <db_path> <db_path>.bak-YYYYMMDD-HHMM`
+     - Or use: `PYTHONPATH=src python3 tools/ops_rebuild_db.py --config config/settings.yaml --schema config/schema.json --backup --force`
   3. Recreate empty DB:
      - python - <<'PY'
 from pathlib import Path

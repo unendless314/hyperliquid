@@ -20,6 +20,8 @@ must be implemented before release.
 
 - Validate config:
   - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
+- Ops preflight (recommended):
+  - PYTHONPATH=src python3 tools/ops_preflight.py --config config/settings.yaml --schema config/schema.json --exchange-time
 
 - Compute config_hash (SHA-256 of config/settings.yaml UTF-8 bytes):
   - python tools/hash_config.py --config config/settings.yaml
@@ -48,6 +50,8 @@ must be implemented before release.
   - sqlite3 <db_path> "select key, value from system_state where key like 'safety_%';"
   - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
   - Note: these queries are read-only.
+- Ops post-start checks (recommended):
+  - PYTHONPATH=src python3 tools/ops_poststart.py --config config/settings.yaml --schema config/schema.json --metrics-tail 5
 
 - Inspect metrics/logs (from settings.yaml keys):
   - metrics_log_path

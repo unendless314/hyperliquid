@@ -43,6 +43,14 @@ Keep each run short and attach only the essential outputs.
 - audit_log count: 0
 - metrics tail snippet:
   - [METRICS] {"name": "reconcile_max_drift", "value": 0.0, "tags": {"reason": "SNAPSHOT_STALE"}}
+- ops_poststart (read-only) output:
+  - safety_mode=ARMED_SAFE
+  - safety_reason_code=SNAPSHOT_STALE
+  - safety_reason_message=Exchange snapshot is stale
+  - last_processed_timestamp_ms=0
+  - last_processed_event_key=
+  - order_results_count=0
+  - audit_log_count=0
 
 ## A3 Failure Path Evidence
 For each failure path, capture:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import urllib.error
+
 from hyperliquid.common.models import OrderIntent
 from hyperliquid.execution.adapters import binance
 
@@ -53,3 +56,32 @@ def test_rate_limit_maps_to_unknown() -> None:
     result = adapter.execute(_build_intent())
     assert result.status == "UNKNOWN"
     assert result.error_code == "RATE_LIMITED"
+
+
+def test_http_429_raises_rate_limit_error() -> None:
+    config = _build_live_config()
+    client = binance.BinanceRestClient(config, binance.logging.getLogger("test"))
+
+    class _FakeResponse:
+        def read(self) -> bytes:
+            return b""
+
+    def _raise_http_error(_req, timeout=None):
+        raise urllib.error.HTTPError(
+            url="https://example.test",
+            code=429,
+            msg="Too Many Requests",
+            hdrs=None,
+            fp=io.BytesIO(b""),
+        )
+
+    original = binance.urllib.request.urlopen
+    binance.urllib.request.urlopen = _raise_http_error
+    try:
+        try:
+            client._request_once("GET", "/fapi/v1/time", params={}, signed=False)
+            assert False, "expected BinanceRateLimitError"
+        except binance.BinanceRateLimitError:
+            assert True
+    finally:
+        binance.urllib.request.urlopen = original
