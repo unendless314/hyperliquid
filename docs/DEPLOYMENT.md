@@ -9,6 +9,9 @@
 - config/settings.yaml is required at startup and validated with schema rules.
 - config_hash is computed from the full config/settings.yaml content.
 - config_hash and config_version are persisted in system_state on startup.
+- Secrets and sensitive identifiers must be provided via environment variables, not committed files.
+  - BINANCE_API_KEY / BINANCE_API_SECRET
+  - HYPERLIQUID_TARGET_WALLET (required for live ingest)
 
 ### Expected Commands (MVP)
 These commands define the expected operator workflow. If a script does not exist yet, it

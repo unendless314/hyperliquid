@@ -5,8 +5,9 @@
 Prerequisites:
 - config/settings.yaml validated
 - config_hash computed and recorded
-- API keys available for selected environment
+- API keys/target wallet available for selected environment (loaded via env vars)
 - Time sync offset computed
+- Missing required env vars in live mode will raise a startup error (not a safety-state transition).
 
 Steps:
 1. Validate config:
@@ -25,6 +26,10 @@ Verification:
 Copy/paste sequence:
 - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
 - python tools/hash_config.py --config config/settings.yaml
+- Ensure env vars are set (no output means unset):
+  - echo "$BINANCE_API_KEY" | wc -c
+  - echo "$BINANCE_API_SECRET" | wc -c
+  - echo "$HYPERLIQUID_TARGET_WALLET" | wc -c
 - python - <<'PY'
 import time
 print(f"local_time_ms={int(time.time() * 1000)}")

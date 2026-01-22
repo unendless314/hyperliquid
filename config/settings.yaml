@@ -11,7 +11,6 @@ ingest:
   hyperliquid:
     enabled: false
     mode: "stub"
-    target_wallet: ""
     rest_url: "https://api.hyperliquid.xyz/info"
     ws_url: ""
     request_timeout_ms: 10000
@@ -68,8 +67,6 @@ execution:
     enabled: false
     mode: "stub"
     base_url: "https://fapi.binance.com"
-    api_key: ""
-    api_secret: ""
     request_timeout_ms: 10000
     recv_window_ms: 5000
     exchange_info_enabled: true

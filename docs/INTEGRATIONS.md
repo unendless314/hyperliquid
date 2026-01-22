@@ -72,6 +72,8 @@
 - Use a single config switch to select testnet vs mainnet.
 - Base URLs and API keys must be bound to the selected environment.
 - Do not allow mixed endpoints within one run.
+- API secrets are loaded from environment variables (BINANCE_API_KEY / BINANCE_API_SECRET).
+- Hyperliquid target wallet is loaded from HYPERLIQUID_TARGET_WALLET (required in live mode).
 
 ## Symbol Mapping
 - Maintain a deterministic mapping between Hyperliquid symbols and Binance symbols.

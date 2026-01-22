@@ -61,9 +61,6 @@
               "type": "string",
               "enum": ["stub", "live"]
             },
-            "target_wallet": {
-              "type": "string"
-            },
             "rest_url": {
               "type": "string"
             },
@@ -312,12 +309,6 @@
               "enum": ["stub", "live"]
             },
             "base_url": {
-              "type": "string"
-            },
-            "api_key": {
-              "type": "string"
-            },
-            "api_secret": {
               "type": "string"
             },
             "request_timeout_ms": {

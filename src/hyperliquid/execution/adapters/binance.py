@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import random
 import time
 import socket
@@ -111,12 +112,19 @@ class BinanceExecutionConfig:
         binance = execution.get("binance", {})
         rate_limit = binance.get("rate_limit", {})
         retry = binance.get("retry", {})
+        api_key = os.getenv("BINANCE_API_KEY", "")
+        api_secret = os.getenv("BINANCE_API_SECRET", "")
+        enabled = bool(binance.get("enabled", False))
+        mode = str(binance.get("mode", "stub"))
+        if enabled and mode == "live":
+            if not api_key or not api_secret:
+                raise ValueError("BINANCE_API_KEY/BINANCE_API_SECRET required for live mode")
         return BinanceExecutionConfig(
-            enabled=bool(binance.get("enabled", False)),
-            mode=str(binance.get("mode", "stub")),
+            enabled=enabled,
+            mode=mode,
             base_url=str(binance.get("base_url", "https://fapi.binance.com")),
-            api_key=str(binance.get("api_key", "")),
-            api_secret=str(binance.get("api_secret", "")),
+            api_key=api_key,
+            api_secret=api_secret,
             request_timeout_ms=int(binance.get("request_timeout_ms", 10_000)),
             recv_window_ms=int(binance.get("recv_window_ms", 5_000)),
             exchange_info_enabled=bool(binance.get("exchange_info_enabled", True)),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import threading
 import time
@@ -85,6 +86,11 @@ class HyperliquidIngestConfig:
         hyperliquid = ingest.get("hyperliquid", {})
         rate_limit = hyperliquid.get("rate_limit", {})
         retry = hyperliquid.get("retry", {})
+        target_wallet = os.getenv("HYPERLIQUID_TARGET_WALLET", "")
+        enabled = bool(hyperliquid.get("enabled", False))
+        mode = str(hyperliquid.get("mode", "stub"))
+        if enabled and mode == "live" and not target_wallet:
+            raise ValueError("HYPERLIQUID_TARGET_WALLET required for live mode")
         stub_events = [
             RawPositionEvent(
                 symbol=str(item["symbol"]),
@@ -108,9 +114,9 @@ class HyperliquidIngestConfig:
             for item in hyperliquid.get("stub_events", [])
         ]
         return HyperliquidIngestConfig(
-            enabled=bool(hyperliquid.get("enabled", False)),
-            mode=str(hyperliquid.get("mode", "stub")),
-            target_wallet=str(hyperliquid.get("target_wallet", "")),
+            enabled=enabled,
+            mode=mode,
+            target_wallet=target_wallet,
             rest_url=str(hyperliquid.get("rest_url", "https://api.hyperliquid.xyz/info")),
             ws_url=str(hyperliquid.get("ws_url", "")),
             request_timeout_ms=int(hyperliquid.get("request_timeout_ms", 10_000)),

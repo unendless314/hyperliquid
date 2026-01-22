@@ -99,7 +99,7 @@ Checklist:
 
 ## Environment Prerequisites (MVP)
 - Binance testnet API key and secret
-- Hyperliquid target wallet address
+- Hyperliquid target wallet address (via HYPERLIQUID_TARGET_WALLET env)
 - config/settings.yaml configured for testnet
 - sqlite3 installed locally
 
