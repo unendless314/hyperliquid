@@ -79,6 +79,23 @@ Expected:
 - tests/chaos/test_network_errors.py (TODO)
 - tests/chaos/test_rate_limit_429.py (TODO)
 
+## Ops Validation
+Reference: docs/RUNBOOK.md (use the scripted preflight/post-start commands).
+
+Checklist:
+- Validate config + schema + config_hash.
+- Confirm time sync offset captured (local time vs exchange time).
+- Run mode-specific checks:
+  - dry-run: no external order placement (adapter disabled); order_results may be written.
+  - live: safety_mode != HALT after startup.
+  - backfill-only: cursor advances; no external order placement (adapter disabled); order_results may be written.
+- Trigger failure paths and verify expected system_state/log outcomes:
+  - SCHEMA_VERSION_MISMATCH
+  - EXECUTION_RETRY_BUDGET_EXCEEDED
+  - RECONCILE_CRITICAL
+  - BACKFILL_WINDOW_EXCEEDED
+- After recovery, confirm audit_log and safety_reason_code remain accurate.
+
 ## Environment Prerequisites (MVP)
 - Binance testnet API key and secret
 - Hyperliquid target wallet address
