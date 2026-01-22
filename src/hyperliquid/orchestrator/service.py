@@ -211,10 +211,22 @@ class Orchestrator:
             positions = load_local_positions_from_orders(conn)
             symbol_key = normalize_execution_symbol(event.symbol)
             local_position = float(positions.get(symbol_key, 0.0))
+            expected_price = None
+            if event.expected_price is not None:
+                expected_price = PriceSnapshot(
+                    price=float(event.expected_price),
+                    timestamp_ms=int(
+                        event.expected_price_timestamp_ms
+                        if event.expected_price_timestamp_ms is not None
+                        else event.timestamp_ms
+                    ),
+                    source="ingest",
+                )
             return DecisionInputs(
                 safety_mode=safety_mode,
                 local_current_position=local_position,
                 closable_qty=abs(local_position),
+                expected_price=expected_price,
             )
 
         decision_service = DecisionService(

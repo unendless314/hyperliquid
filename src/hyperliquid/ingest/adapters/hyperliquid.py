@@ -110,6 +110,16 @@ class HyperliquidIngestConfig:
                     if "close_component" in item
                     else None
                 ),
+                expected_price=(
+                    float(item["expected_price"])
+                    if "expected_price" in item
+                    else None
+                ),
+                expected_price_timestamp_ms=(
+                    int(item["expected_price_timestamp_ms"])
+                    if "expected_price_timestamp_ms" in item
+                    else None
+                ),
             )
             for item in hyperliquid.get("stub_events", [])
         ]

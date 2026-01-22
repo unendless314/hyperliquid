@@ -161,6 +161,13 @@
                   },
                   "close_component": {
                     "type": "number"
+                  },
+                  "expected_price": {
+                    "type": "number"
+                  },
+                  "expected_price_timestamp_ms": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 }
               }

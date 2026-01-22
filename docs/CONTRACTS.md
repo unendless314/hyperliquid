@@ -16,6 +16,10 @@ Required fields:
 - open_component: REAL (base asset qty; required only for FLIP; nullable otherwise)
 - close_component: REAL (base asset qty; required only for FLIP; nullable otherwise)
 
+Optional fields:
+- expected_price: REAL (event-time expected execution price from ingest/leader)
+- expected_price_timestamp_ms: INTEGER (UTC epoch milliseconds; defaults to event timestamp)
+
 Rules:
 - action_type is derived from prev/next net position
 - FLIP must split into open_component and close_component

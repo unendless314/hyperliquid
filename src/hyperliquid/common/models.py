@@ -69,6 +69,8 @@ class PositionDeltaEvent:
     action_type: str
     open_component: Optional[float]
     close_component: Optional[float]
+    expected_price: Optional[float] = None
+    expected_price_timestamp_ms: Optional[int] = None
     contract_version: str = field(default=CONTRACT_VERSION)
 
 

@@ -24,6 +24,8 @@ class RawPositionEvent:
     timestamp_ms: Optional[int] = None
     open_component: Optional[float] = None
     close_component: Optional[float] = None
+    expected_price: Optional[float] = None
+    expected_price_timestamp_ms: Optional[int] = None
 
 
 @dataclass
@@ -41,9 +43,13 @@ class IngestService:
         action_type: Optional[str] = None,
         open_component: Optional[float] = None,
         close_component: Optional[float] = None,
+        expected_price: Optional[float] = None,
+        expected_price_timestamp_ms: Optional[int] = None,
     ) -> PositionDeltaEvent:
         if timestamp_ms is None:
             timestamp_ms = int(time.time() * 1000)
+        if expected_price is not None and expected_price_timestamp_ms is None:
+            expected_price_timestamp_ms = timestamp_ms
         delta = next_target_net_position - prev_target_net_position
         if action_type is None:
             if prev_target_net_position == 0:
@@ -69,6 +75,8 @@ class IngestService:
             action_type=action_type,
             open_component=open_component,
             close_component=close_component,
+            expected_price=expected_price,
+            expected_price_timestamp_ms=expected_price_timestamp_ms,
         )
         assert_contract_version(event.contract_version)
         return event
@@ -90,6 +98,8 @@ class IngestService:
                 timestamp_ms=raw.timestamp_ms,
                 open_component=raw.open_component,
                 close_component=raw.close_component,
+                expected_price=raw.expected_price,
+                expected_price_timestamp_ms=raw.expected_price_timestamp_ms,
             )
             with conn:
                 record_processed_tx(

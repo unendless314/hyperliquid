@@ -64,6 +64,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Define decision request/response models
   - [x] Task: Add contract version assertion on decision inputs/outputs
   - [x] Task: Add replay policy gate (close-only)
+  - [x] Task: Wire expected_price from ingest events into DecisionInputs (slippage checks)
   - Acceptance: Decision service returns deterministic placeholder actions
 
 - [x] Story 2.2: Strategy constraints
@@ -125,7 +126,7 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable
 
-## Handoff Notes (2026/01/21)
+## Handoff Notes (2026/01/22)
 
   ### Current Status
 
@@ -146,14 +147,14 @@ see the technical docs referenced in docs/README.md.
 
   ### Remaining Work
 
-  1. Integration tests for live paths (rate limit, timeout, duplicate, reconcile paths).
-  2. Ops validation checklist in docs/RUNBOOK.md (manual verification).
-  3. Optional: expected_price wiring from ingest/leader for slippage hard-gating.
+  1. Live testnet verification with non-stale reconcile (ARMED_LIVE) and small-order validation.
+  2. Decide whether to add more chaos tests or backfill edge cases before production.
+  3. Formalize Go/No-Go checklist for production (monitoring, alerting, rollback rehearsal).
 
   ### Notes / Risks
 
   - DB schema bumped to v3 (audit_log table); existing DBs must be recreated if used.
-  - Slippage currently relies on expected_price being supplied; without it, policy determines allow/reject.
+  - Slippage can use ingest-provided expected_price; if upstream does not supply it, behavior follows price_failure_policy (allow/reject/warn).
 
 ## Handoff Checklist
 - Confirm config schema validates: tools/validate_config.py

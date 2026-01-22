@@ -6,6 +6,7 @@
 - Deduplicate events (tx_hash + event_index + symbol)
 - Track target wallet net position
 - Emit PositionDeltaEvent
+- Populate expected_price when available (optional; used for decision slippage)
 
 ## Adapter Status (MVP)
 - REST backfill and polling are wired for live mode (polling uses userFillsByTime to avoid 2000-row limits).
