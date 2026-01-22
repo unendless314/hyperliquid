@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from hyperliquid.common.settings import load_settings
 from hyperliquid.orchestrator.service import Orchestrator
 
@@ -48,6 +50,7 @@ def main() -> int:
     config_path = Path(args.config)
     schema_path = Path("config/schema.json")
 
+    load_dotenv()
     settings = load_settings(config_path, schema_path)
     orchestrator = Orchestrator(
         settings=settings,

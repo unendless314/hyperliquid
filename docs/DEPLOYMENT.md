@@ -12,6 +12,7 @@
 - Secrets and sensitive identifiers must be provided via environment variables, not committed files.
   - BINANCE_API_KEY / BINANCE_API_SECRET
   - HYPERLIQUID_TARGET_WALLET (required for live ingest)
+- .env is supported via python-dotenv (loaded at startup).
 
 ### Expected Commands (MVP)
 These commands define the expected operator workflow. If a script does not exist yet, it

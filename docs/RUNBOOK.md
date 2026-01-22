@@ -30,6 +30,7 @@ Copy/paste sequence:
   - echo "$BINANCE_API_KEY" | wc -c
   - echo "$BINANCE_API_SECRET" | wc -c
   - echo "$HYPERLIQUID_TARGET_WALLET" | wc -c
+- Note: .env is loaded automatically at startup (python-dotenv).
 - python - <<'PY'
 import time
 print(f"local_time_ms={int(time.time() * 1000)}")
