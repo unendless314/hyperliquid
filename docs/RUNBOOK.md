@@ -76,6 +76,11 @@ Copy/paste sequence:
 - sqlite3 <db_path> "select key, value from system_state where key like 'last_processed_%';"
 - sqlite3 <db_path> "select count(*) from audit_log;"
 - tail -n 50 <metrics_log_path>
+
+### Ops Validation Bundle (Recommended)
+Single command to collect preflight + post-start evidence:
+- PYTHONPATH=src python3 tools/ops_validate_run.py --config config/settings.yaml --schema config/schema.json --exchange-time --metrics-tail 5 --output docs/ops_validation_run.txt
+- Note: add --allow-create-db only for first-time bootstrap when the DB does not exist.
 Expected:
 - safety_mode populated in system_state.
 - last_processed_* keys present after ingest starts.

@@ -22,6 +22,9 @@ must be implemented before release.
   - python tools/validate_config.py --config config/settings.yaml --schema config/schema.json
 - Ops preflight (recommended):
   - PYTHONPATH=src python3 tools/ops_preflight.py --config config/settings.yaml --schema config/schema.json --exchange-time
+- Ops validation bundle (recommended):
+  - PYTHONPATH=src python3 tools/ops_validate_run.py --config config/settings.yaml --schema config/schema.json --exchange-time --metrics-tail 5 --output docs/ops_validation_run.txt
+  - Note: add --allow-create-db only for first-time bootstrap when the DB does not exist.
 
 - Compute config_hash (SHA-256 of config/settings.yaml UTF-8 bytes):
   - python tools/hash_config.py --config config/settings.yaml
