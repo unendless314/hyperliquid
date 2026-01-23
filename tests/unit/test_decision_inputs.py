@@ -1,6 +1,7 @@
 from hyperliquid.common.models import PositionDeltaEvent
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionInputs, DecisionService
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.types import DecisionInputs
 
 
 def _safety_mode_provider() -> str:
@@ -67,3 +68,4 @@ def test_missing_local_position_allows_increase() -> None:
     inputs = DecisionInputs(safety_mode="ARMED_LIVE", local_current_position=None, closable_qty=None)
     intents = service.decide(_increase_event(), inputs)
     assert len(intents) == 1
+    assert intents[0].strategy_version == "v1"

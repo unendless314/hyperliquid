@@ -1,5 +1,6 @@
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionInputs, DecisionService
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.types import DecisionInputs
 from hyperliquid.common.models import PositionDeltaEvent
 
 
@@ -39,6 +40,8 @@ def test_flip_generates_distinct_intents() -> None:
     assert intents[0].correlation_id != intents[1].correlation_id
     assert intents[0].correlation_id.endswith("-close")
     assert intents[1].correlation_id.endswith("-open")
+    assert intents[0].strategy_version == "v1"
+    assert intents[1].strategy_version == "v1"
 
 
 def test_flip_in_armed_safe_keeps_reduce_only() -> None:
@@ -56,3 +59,4 @@ def test_flip_in_armed_safe_keeps_reduce_only() -> None:
     assert len(intents) == 1
     assert intents[0].reduce_only == 1
     assert intents[0].correlation_id.endswith("-close")
+    assert intents[0].strategy_version == "v1"

@@ -1,6 +1,7 @@
 from hyperliquid.common.models import PositionDeltaEvent, PriceSnapshot
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionInputs, DecisionService
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.types import DecisionInputs
 
 
 def _safety_mode_provider() -> str:

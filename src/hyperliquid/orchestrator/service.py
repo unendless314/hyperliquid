@@ -16,7 +16,8 @@ from hyperliquid.common.models import (
 from hyperliquid.common.pipeline import Pipeline
 from hyperliquid.common.settings import Settings, compute_config_hash
 from hyperliquid.decision.config import DecisionConfig
-from hyperliquid.decision.service import DecisionInputs, DecisionService
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.types import DecisionInputs
 from hyperliquid.execution.adapters.binance import (
     AdapterNotImplementedError,
     BinanceExecutionAdapter,

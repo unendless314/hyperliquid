@@ -10,11 +10,11 @@ from hyperliquid.common.models import (
     PositionDeltaEvent,
     PriceSnapshot,
     assert_contract_version,
-    correlation_id,
 )
 from hyperliquid.decision.config import DecisionConfig
 from hyperliquid.decision import reasons
-from hyperliquid.decision.position import reduce_only_for_action
+from hyperliquid.decision.strategy import StrategyV1
+from hyperliquid.decision.types import DecisionInputs
 
 
 SafetyModeProvider = Callable[[], str]
@@ -25,14 +25,6 @@ FiltersProvider = Callable[[str], Optional[SymbolFilters]]
 
 SUPPORTED_STRATEGY_VERSIONS = {"v1"}
 SUPPORTED_REPLAY_POLICIES = {"close_only"}
-
-
-@dataclass(frozen=True)
-class DecisionInputs:
-    safety_mode: str
-    local_current_position: Optional[float] = None
-    closable_qty: Optional[float] = None
-    expected_price: Optional[PriceSnapshot] = None
 
 
 def _default_now_ms() -> int:
@@ -50,12 +42,14 @@ class DecisionService:
     now_ms_provider: NowMsProvider = _default_now_ms
     logger: Optional[object] = None
     _replay_policy_provider: ReplayPolicyProvider = field(init=False)
+    _strategy: StrategyV1 = field(init=False)
 
     def __post_init__(self) -> None:
         if self.replay_policy_provider is None:
             self._replay_policy_provider = lambda: self.config.replay_policy
         else:
             self._replay_policy_provider = self.replay_policy_provider
+        self._strategy = StrategyV1(self.config)
 
     def decide(
         self, event: PositionDeltaEvent, inputs: DecisionInputs | None = None
@@ -95,116 +89,16 @@ class DecisionService:
         intents = self._apply_policy_gates(intents, safety_mode, event.is_replay, event)
         return intents
 
-    @staticmethod
-    def _build_intent(
-        event: PositionDeltaEvent,
-        *,
-        side: str,
-        qty: float,
-        reduce_only: int,
-        strategy_version: str,
-        suffix: str | None = None,
-        risk_notes: Optional[str] = None,
-    ) -> OrderIntent:
-        intent = OrderIntent(
-            correlation_id=correlation_id(
-                event.tx_hash, event.event_index, event.symbol, suffix=suffix
-            ),
-            client_order_id=None,
-            strategy_version=strategy_version,
-            symbol=event.symbol,
-            side=side,
-            order_type="MARKET",
-            qty=qty,
-            price=None,
-            reduce_only=reduce_only,
-            time_in_force="IOC",
-            is_replay=event.is_replay,
-            risk_notes=risk_notes,
-        )
-        assert_contract_version(intent.contract_version)
-        return intent
-
     def _build_intents(
         self, event: PositionDeltaEvent, inputs: DecisionInputs
     ) -> List[OrderIntent]:
         strategy_version = self._strategy_version_value()
-        if event.action_type == "FLIP":
-            return self._build_flip_intents(event, inputs, strategy_version)
-
-        if event.action_type == "DECREASE":
-            close_qty, close_reason = self._compute_close_qty(event, inputs)
-            if close_qty <= 0:
-                self._log_reject(close_reason or reasons.NO_CLOSABLE_QTY, event)
-                return []
-            close_side = "SELL" if event.prev_target_net_position > 0 else "BUY"
-            return [
-                self._build_intent(
-                    event=event,
-                    side=close_side,
-                    qty=close_qty,
-                    reduce_only=reduce_only_for_action(event.action_type),
-                    strategy_version=strategy_version,
-                )
-            ]
-
-        qty, sizing_reason = self._compute_increase_qty(event)
-        if qty <= 0:
-            self._log_reject(sizing_reason or reasons.SIZING_INVALID, event)
+        intents, reject_reason = self._strategy.build_intents(
+            event, inputs, strategy_version=strategy_version
+        )
+        if reject_reason:
+            self._log_reject(reject_reason, event)
             return []
-        side = "BUY" if event.delta_target_net_position > 0 else "SELL"
-        return [
-            self._build_intent(
-                event=event,
-                side=side,
-                qty=qty,
-                reduce_only=reduce_only_for_action(event.action_type),
-                strategy_version=strategy_version,
-            )
-        ]
-
-    def _build_flip_intents(
-        self, event: PositionDeltaEvent, inputs: DecisionInputs, strategy_version: str
-    ) -> List[OrderIntent]:
-        if event.close_component is None or event.open_component is None:
-            raise ValueError("FLIP requires close_component and open_component")
-
-        close_qty = abs(event.close_component)
-        open_qty = abs(event.open_component)
-        if close_qty <= 0 and open_qty <= 0:
-            return []
-
-        if close_qty > 0:
-            close_qty, close_reason = self._compute_close_qty(event, inputs)
-            if close_qty <= 0:
-                self._log_reject(close_reason or reasons.NO_CLOSABLE_QTY, event)
-                return []
-
-        intents: List[OrderIntent] = []
-        if close_qty > 0:
-            close_side = "SELL" if event.prev_target_net_position > 0 else "BUY"
-            intents.append(
-                self._build_intent(
-                    event=event,
-                    side=close_side,
-                    qty=close_qty,
-                    reduce_only=reduce_only_for_action(event.action_type, "close"),
-                    strategy_version=strategy_version,
-                    suffix="close",
-                )
-            )
-        if open_qty > 0:
-            open_side = "BUY" if event.next_target_net_position > 0 else "SELL"
-            intents.append(
-                self._build_intent(
-                    event=event,
-                    side=open_side,
-                    qty=open_qty,
-                    reduce_only=reduce_only_for_action(event.action_type, "open"),
-                    strategy_version=strategy_version,
-                    suffix="open",
-                )
-            )
         return intents
 
     def _apply_policy_gates(
@@ -394,41 +288,6 @@ class DecisionService:
                         stale = True
         return snapshot, stale
 
-    def _compute_close_qty(
-        self, event: PositionDeltaEvent, inputs: DecisionInputs
-    ) -> tuple[float, Optional[str]]:
-        if inputs.local_current_position is None:
-            return 0.0, reasons.MISSING_LOCAL_POSITION
-        if inputs.closable_qty is None:
-            return 0.0, reasons.MISSING_CLOSABLE_QTY
-        if event.prev_target_net_position == 0:
-            return 0.0, reasons.NO_CLOSABLE_QTY
-        target_ratio = min(
-            1.0,
-            abs(event.delta_target_net_position) / max(abs(event.prev_target_net_position), 1e-9),
-        )
-        local_close_qty = abs(inputs.local_current_position) * target_ratio
-        return min(local_close_qty, abs(inputs.closable_qty)), None
-
-    def _compute_increase_qty(self, event: PositionDeltaEvent) -> tuple[float, Optional[str]]:
-        base_qty = abs(event.delta_target_net_position)
-        if base_qty <= 0:
-            return 0.0, reasons.SIZING_INVALID
-        sizing = self.config.sizing
-        if sizing.mode == "fixed":
-            return float(sizing.fixed_qty), None
-        if sizing.mode == "proportional":
-            return float(base_qty * sizing.proportional_ratio), None
-        if sizing.mode == "kelly":
-            win_rate = sizing.kelly_win_rate
-            edge = sizing.kelly_edge
-            if win_rate <= 0 or edge <= 0:
-                return 0.0, reasons.KELLY_PARAMS_MISSING
-            kelly_fraction = win_rate - ((1 - win_rate) / edge)
-            if kelly_fraction <= 0:
-                return 0.0, reasons.SIZING_INVALID
-            return float(base_qty * kelly_fraction * sizing.kelly_fraction), None
-        return 0.0, reasons.SIZING_INVALID
 
     @staticmethod
     def _map_filter_error(code: str) -> str:

@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional
 
 from hyperliquid.common.models import OrderIntent, OrderResult, PositionDeltaEvent
-from hyperliquid.decision.service import DecisionInputs, DecisionService
+from hyperliquid.decision.service import DecisionService
+from hyperliquid.decision.types import DecisionInputs
 from hyperliquid.execution.service import ExecutionService
 from hyperliquid.storage.persistence import Persistence
 

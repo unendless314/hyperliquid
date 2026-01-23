@@ -22,6 +22,7 @@
 3. Hard risk checks (slippage, filters, position mode, stale data)
 4. Replay policy gate (after hard risk checks)
 5. Return intents
+Note: Hard risk checks require intent qty/price, so they run after sizing.
 
 ## Key Rules
 - DECREASE and close_component must be reduce-only
