@@ -115,8 +115,8 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Core state can be recovered after restart
 
 ## Epic 6: Testing + runbook alignment
-- [~] Story 6.1: Test scaffolding
-  - [~] Task: Add tests listed in docs/TEST_PLAN.md TODOs (partial; added integration coverage for WS reconnect/backfill, dedup, retry budget, safety gating, partial fills, snapshot stale, drift thresholds; added unit tests for hook signatures and ops validation)
+- [x] Story 6.1: Test scaffolding
+  - [x] Task: Add tests listed in docs/TEST_PLAN.md TODOs (completed; unit, integration, and chaos coverage now aligned with docs/TEST_PLAN.md)
   - [x] Task: Add minimal unit tests for settings + DB init (added multiple unit tests)
   - [x] Task: Add unit tests for execution recovery + binance adapter mapping
   - [x] Task: Add unit tests for safety reconcile flow
@@ -128,14 +128,14 @@ see the technical docs referenced in docs/README.md.
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - Acceptance: Manual ops checklist is executable (full ops checklist not completed yet)
 
-## Handoff Notes (2026/01/22)
+## Handoff Notes (2026/01/23)
 
   ### Summary
 
-  - Completed Story 6.1 key integration set; all pass (see docs/TEST_PLAN.md "Key Integration Set (2026-01-22)").
-  - Completed Story 6.2 A2 live testnet ops validation; evidence saved at docs/ops_validation_run.txt.
-  - Implemented ops validation automation: tools/ops_validate_run.py (read-only DB check by default; --allow-create-db for first bootstrap).
-  - Fixed Binance empty-position snapshot timestamp handling (updateTime=0 now uses current timestamp to avoid SNAPSHOT_STALE).
+  - Completed Story 2.1 (StrategyV1 modularization, strategy_version enforcement, deterministic behavior/tests).
+  - Completed Story 6.1 test scaffolding TODOs (unit, integration, chaos), and aligned docs/TEST_PLAN.md.
+  - Added sizing max_qty and Kelly parameter validation; expanded risk rule coverage and deterministic tests.
+  - Added integration coverage for WS stale fallback to REST + backfill overlap dedup.
 
   ### Current Config State
 
@@ -150,10 +150,9 @@ see the technical docs referenced in docs/README.md.
 
   ### Remaining Work (next milestone)
 
-  1. Decide on additional chaos/backfill edge cases and implement remaining chaos tests in docs/TEST_PLAN.md.
-  2. Strategy engine still placeholder (Story 2.1 → real strategy rules + versioning).
-  3. Formalize Go/No-Go checklist for production (monitoring, alerting, rollback rehearsal).
-  4. Optional: address pytest-asyncio warning (loop scope default).
+  1. Complete Story 6.2 ops validation by running full RUNBOOK flows and capturing evidence.
+  2. Formalize/execute Production Go/No-Go checklist with evidence (monitoring, alerting, rollback rehearsal).
+  3. Optional: address pytest-asyncio warning (loop scope default).
 
   ### Notes / Risks
 

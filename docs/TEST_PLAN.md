@@ -91,20 +91,20 @@ Expected:
 - safety_mode is ARMED_SAFE or ARMED_LIVE (per config) and not HALT.
 
 ## Unit Tests
-- tests/unit/test_config_validation.py (TODO)
-- tests/unit/test_sizing_logic.py (TODO)
-- tests/unit/test_dedup_logic.py (TODO)
-- tests/unit/test_backfill_overlap.py (TODO)
-- tests/unit/test_cursor_dedup_persistence.py (TODO)
-- tests/unit/test_unknown_recovery.py (TODO)
-- tests/unit/test_safety_promotion_conditions.py (TODO)
+- tests/unit/test_config_validation.py
+- tests/unit/test_sizing_logic.py
+- tests/unit/test_dedup_logic.py
+- tests/unit/test_backfill_overlap.py
+- tests/unit/test_cursor_dedup_persistence.py
+- tests/unit/test_unknown_recovery.py
+- tests/unit/test_safety_promotion_conditions.py
 - tests/unit/test_hook_signatures.py
 - tests/unit/test_ops_validate_run.py
 
 ## Integration Tests
 - tests/integration/test_binance_submit_cancel.py (rate limit, timeout, duplicate handling)
 - tests/integration/test_ws_backfill.py (reconcile path: missing symbol -> HALT)
-- tests/integration/test_ws_reconnect.py (disconnect + resume + backfill overlap) (TODO)
+- tests/integration/test_ws_reconnect.py (disconnect + resume + backfill overlap)
 - tests/integration/test_ws_reconnect_backfill.py
 - tests/integration/test_ingest_pipeline_dedup.py
 - tests/integration/test_execution_retry_budget.py
@@ -125,10 +125,10 @@ Included:
 - tests/integration/test_reconcile_drift_thresholds.py
 
 ## Chaos Tests
-- tests/chaos/test_network_errors.py (TODO)
-- tests/chaos/test_rate_limit_429.py (TODO)
-- tests/chaos/test_partial_fills.py (TODO)
-- tests/chaos/test_delayed_reports.py (TODO)
+- tests/chaos/test_network_errors.py
+- tests/chaos/test_rate_limit_429.py
+- tests/chaos/test_partial_fills.py
+- tests/chaos/test_delayed_reports.py
 
 ## Failure Taxonomy (for Chaos/Backfill)
 Use these categories to decide coverage and expected recovery behavior:
