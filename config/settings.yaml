@@ -35,7 +35,8 @@ ingest:
 decision:
   max_stale_ms: 0
   max_future_ms: 2000
-  replay_policy: "close-only"
+  strategy_version: "v1"
+  replay_policy: "close_only"
   price_source: "adapter"
   price_fallback_enabled: false
   price_fallback_max_stale_ms: 5000

@@ -20,7 +20,8 @@ def _build_settings(root: Path) -> Settings:
         config_path=root / "settings.yaml",
         raw={
             "decision": {
-                "replay_policy": "allow",
+                "strategy_version": "v1",
+                "replay_policy": "close_only",
             },
             "execution": {"binance": {"enabled": False, "mode": "stub"}},
             "ingest": {
@@ -95,7 +96,7 @@ def test_ingest_pipeline_dedup_across_backfill_and_live(monkeypatch) -> None:
             assert len(events) == 2
             results = pipeline.process_events(events)
 
-            assert len(results) == 2
+            assert len(results) == 1
             row = conn.execute("SELECT count(*) FROM processed_txs").fetchone()
             assert row is not None
             assert int(row[0]) == 2
@@ -107,10 +108,10 @@ def test_ingest_pipeline_dedup_across_backfill_and_live(monkeypatch) -> None:
             assert int(dup_count[0]) == 1
             row = conn.execute("SELECT count(*) FROM order_intents").fetchone()
             assert row is not None
-            assert int(row[0]) == 2
+            assert int(row[0]) == 1
             row = conn.execute("SELECT count(*) FROM order_results").fetchone()
             assert row is not None
-            assert int(row[0]) == 2
+            assert int(row[0]) == 1
             assert get_system_state(conn, "last_processed_event_key") == "1100|2|0xnew|BTCUSDT"
         finally:
             conn.close()

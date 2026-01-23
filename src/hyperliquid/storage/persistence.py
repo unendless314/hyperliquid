@@ -55,6 +55,7 @@ class DbPersistence:
             return None
         payload = json.loads(row[0])
         payload.setdefault("client_order_id", None)
+        payload.setdefault("strategy_version", None)
         return OrderIntent(**payload)
 
     def ensure_intent(self, intent: OrderIntent) -> OrderIntent:
@@ -235,6 +236,7 @@ def _intent_equivalent(left: OrderIntent, right: OrderIntent) -> bool:
         and left.reduce_only == right.reduce_only
         and left.time_in_force == right.time_in_force
         and left.is_replay == right.is_replay
+        and left.strategy_version == right.strategy_version
         and left.risk_notes == right.risk_notes
         and left.contract_version == right.contract_version
     )

@@ -25,7 +25,9 @@ def _event() -> PositionDeltaEvent:
 
 def test_slippage_rejects_when_reference_missing_and_policy_rejects() -> None:
     service = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.01, price_failure_policy="reject"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.01, price_failure_policy="reject", strategy_version="v1"
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: None,
     )
@@ -39,7 +41,9 @@ def test_slippage_rejects_when_reference_missing_and_policy_rejects() -> None:
 
 def test_slippage_rejects_when_expected_missing_and_policy_rejects() -> None:
     service = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.01, price_failure_policy="reject"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.01, price_failure_policy="reject", strategy_version="v1"
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: PriceSnapshot(
             price=101.0, timestamp_ms=1700000000000, source="adapter"
@@ -52,7 +56,11 @@ def test_slippage_rejects_when_expected_missing_and_policy_rejects() -> None:
 
 def test_slippage_rejects_when_over_cap() -> None:
     service = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.01, price_failure_policy="allow_without_price"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.01,
+            price_failure_policy="allow_without_price",
+            strategy_version="v1",
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: PriceSnapshot(
             price=105.0, timestamp_ms=1700000000000, source="adapter"
@@ -68,7 +76,11 @@ def test_slippage_rejects_when_over_cap() -> None:
 
 def test_slippage_allows_within_cap() -> None:
     service = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.02, price_failure_policy="allow_without_price"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.02,
+            price_failure_policy="allow_without_price",
+            strategy_version="v1",
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: PriceSnapshot(
             price=101.0, timestamp_ms=1700000000000, source="adapter"
@@ -88,6 +100,7 @@ def test_slippage_rejects_stale_expected_price() -> None:
             slippage_cap_pct=0.02,
             price_failure_policy="reject",
             expected_price_max_stale_ms=1000,
+            strategy_version="v1",
         ),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2000,

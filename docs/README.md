@@ -59,6 +59,10 @@ Minimum viable docs to start coding:
 - Fail fast on unsafe or inconsistent conditions
 - Prefer deterministic, auditable behavior over speed
 
+## Naming Conventions
+- CLI flags and mode values use kebab-case (e.g., dry-run, backfill-only).
+- Config enum values use snake_case (e.g., close_only, allow_without_price).
+
 ## Future Work / Out of Scope (MVP)
 - Capital exposure limits (daily/weekly loss caps, per-leader allocation caps) are user-managed and not enforced by the system yet.
 - Strategy effectiveness monitoring (leader performance drift, auto-disable rules) is intentionally deferred.

@@ -15,7 +15,7 @@ def _safety_mode_provider() -> str:
 def test_pipeline_records_intents_and_results() -> None:
     ingest = IngestService()
     decision = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
     )
     execution = ExecutionService()
@@ -48,7 +48,11 @@ def test_expected_price_wired_into_decision_inputs(db_conn, db_path) -> None:
     set_system_state(db_conn, "safety_mode", "ARMED_LIVE")
     ingest = IngestService()
     decision = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.01, price_failure_policy="allow_without_price"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.01,
+            price_failure_policy="allow_without_price",
+            strategy_version="v1",
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: PriceSnapshot(
             price=105.0, timestamp_ms=1700000000000, source="adapter"
@@ -74,6 +78,7 @@ def test_expected_price_wired_into_decision_inputs(db_conn, db_path) -> None:
             "decision": {
                 "slippage_cap_pct": 0.01,
                 "price_failure_policy": "allow_without_price",
+                "strategy_version": "v1",
             },
         },
     )
@@ -105,7 +110,11 @@ def test_expected_price_missing_allows_intent(db_conn, db_path) -> None:
     set_system_state(db_conn, "safety_mode", "ARMED_LIVE")
     ingest = IngestService()
     decision = DecisionService(
-        config=DecisionConfig(slippage_cap_pct=0.01, price_failure_policy="allow_without_price"),
+        config=DecisionConfig(
+            slippage_cap_pct=0.01,
+            price_failure_policy="allow_without_price",
+            strategy_version="v1",
+        ),
         safety_mode_provider=_safety_mode_provider,
         price_provider=lambda symbol: PriceSnapshot(
             price=105.0, timestamp_ms=1700000000000, source="adapter"
@@ -131,6 +140,7 @@ def test_expected_price_missing_allows_intent(db_conn, db_path) -> None:
             "decision": {
                 "slippage_cap_pct": 0.01,
                 "price_failure_policy": "allow_without_price",
+                "strategy_version": "v1",
             },
         },
     )

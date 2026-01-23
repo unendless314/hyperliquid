@@ -14,7 +14,7 @@ def _safety_mode_provider() -> str:
 def test_ingest_pipeline_writes_intents_and_results(db_conn) -> None:
     ingest = IngestService()
     decision = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
     )
     execution = ExecutionService()

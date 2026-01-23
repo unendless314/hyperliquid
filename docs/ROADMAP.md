@@ -63,7 +63,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Implement decision service interface in src/hyperliquid/decision/service.py
   - [x] Task: Define decision request/response models
   - [x] Task: Add contract version assertion on decision inputs/outputs
-  - [x] Task: Add replay policy gate (close-only)
+  - [x] Task: Add replay policy gate (close_only)
   - [x] Task: Wire expected_price from ingest events into DecisionInputs (slippage checks)
   - Acceptance: Decision service returns deterministic placeholder actions (strategy rules/versioning not implemented yet)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,8 @@ class DecisionConfig:
     max_future_ms: int = 2000
     price_max_stale_ms: int = 0
     expected_price_max_stale_ms: int = 0
-    replay_policy: str = "close-only"
+    strategy_version: Optional[str] = None
+    replay_policy: str = "close_only"
     price_source: str = "adapter"
     price_fallback_enabled: bool = False
     price_fallback_max_stale_ms: int = 0
@@ -41,7 +42,8 @@ class DecisionConfig:
             max_future_ms=int(raw.get("max_future_ms", 2000)),
             price_max_stale_ms=int(raw.get("price_max_stale_ms", 0)),
             expected_price_max_stale_ms=int(raw.get("expected_price_max_stale_ms", 0)),
-            replay_policy=str(raw.get("replay_policy", "close-only")),
+            strategy_version=raw.get("strategy_version"),
+            replay_policy=str(raw.get("replay_policy", "close_only")),
             price_source=str(raw.get("price_source", "adapter")),
             price_fallback_enabled=bool(raw.get("price_fallback_enabled", False)),
             price_fallback_max_stale_ms=int(raw.get("price_fallback_max_stale_ms", 0)),

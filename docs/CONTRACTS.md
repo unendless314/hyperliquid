@@ -34,6 +34,7 @@ Produced by Decision and consumed by Execution.
 
 Required fields:
 - correlation_id: TEXT (unique, stable per PositionDeltaEvent)
+- strategy_version: TEXT (non-empty, from decision.strategy_version)
 - symbol: TEXT
 - side: TEXT enum {BUY, SELL}
 - order_type: TEXT enum {LIMIT, MARKET}
@@ -47,6 +48,7 @@ Required fields:
 Rules:
 - reduce_only must be true for DECREASE and close_component
 - correlation_id must map back to PositionDeltaEvent
+- strategy_version must be present and supported by the decision engine
 - If order_type is MARKET, price may be null
 
 ## OrderResult

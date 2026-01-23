@@ -107,6 +107,19 @@ Backfill-only:
 Failure/rollback:
 - If cursor does not advance or safety_mode == HALT, stop process and follow incident response.
 
+## Production Readiness (Go/No-Go)
+Checklist (record evidence in ops validation notes):
+- Config validated and config_hash recorded (Startup steps 1-2 completed).
+- Scripted preflight + post-start checks completed with expected output.
+- Ops validation bundle captured (docs/ops_validation_run.txt updated for this run).
+- Runbook flow validated end-to-end in the target mode (live/dry-run/backfill-only).
+- Decision strategy version set and documented (see docs/modules/DECISION.md acceptance).
+- DB schema version confirmed:
+  - sqlite3 <db_path> "select value from system_state where key='schema_version';"
+  - If schema_version < 3, rebuild DB before live use (do not reuse old DBs).
+- Key integration tests executed per docs/TEST_PLAN.md (record date + results).
+- Rollback triggers and escalation path reviewed with operator on duty.
+
 ## Incident Response
 
 ### 1) Entered ARMED_SAFE

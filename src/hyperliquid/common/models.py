@@ -86,6 +86,7 @@ class OrderIntent:
     reduce_only: int
     time_in_force: str
     is_replay: int
+    strategy_version: Optional[str] = None
     risk_notes: Optional[str] = None
     contract_version: str = field(default=CONTRACT_VERSION)
 

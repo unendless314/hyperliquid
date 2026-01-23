@@ -10,7 +10,7 @@
 ## Inputs
 - PositionDeltaEvent
 - DecisionInputs (local state + providers)
-- settings: max_stale_ms, replay_policy, filters config, sizing config
+- settings: max_stale_ms, replay_policy, strategy_version, filters config, sizing config
 
 ## Outputs
 - OrderIntent
@@ -18,16 +18,27 @@
 
 ## Decision Order (Strict)
 1. Event validation (schema, freshness)
-2. Replay policy gate
+2. Sizing (fixed / proportional / kelly) to build candidate intents
 3. Hard risk checks (slippage, filters, position mode, stale data)
-4. Sizing (fixed / proportional / kelly)
-5. Build OrderIntent
+4. Replay policy gate (after hard risk checks)
+5. Return intents
 
 ## Key Rules
 - DECREASE and close_component must be reduce-only
 - If closable_qty == 0: skip with warning (no reverse open)
-- Replay policy defaults to close-only (no exposure increase)
+- Replay policy defaults to close_only (no exposure increase)
 - Use mark price or mid for slippage checks
+
+## Strategy Versioning + Replay Acceptance (MVP)
+Acceptance criteria for Story 2.1 strategy rollout:
+- Strategy version is explicitly configured as decision.strategy_version (settings) and attached to every OrderIntent.
+- If strategy_version is missing or empty, reject with reason_code=strategy_version_missing.
+- If strategy_version is set to an unsupported value, reject with reason_code=strategy_version_unsupported.
+- Decision output is deterministic for the same input + strategy_version.
+- Replay policy is enforced after hard risk checks and before any exposure-increasing intent is emitted.
+- For is_replay=1, only reduce-only intents are allowed when replay_policy=close_only.
+- Rejections must include a stable reason_code. Required: replay_policy_blocked, strategy_version_missing, strategy_version_unsupported, replay_policy_unsupported.
+- Strategy version bumps are documented with behavior changes and tests updated accordingly.
 
 ## Partial Fill Policy
 - Partial fills are treated as normal market behavior.
@@ -38,11 +49,11 @@
 Exposure-increasing intents are blocked only when:
 - Safety mode is ARMED_SAFE or HALT
 - Hard risk checks fail (slippage, filters, position mode, stale data)
-- Replay policy forbids increase (backfill events)
 
 ## Replay Policy (MVP)
-- Default replay policy is close-only: for is_replay=1, only reduce-only intents are allowed.
-- Replay policy is enforced after safety gating.
+- Default replay policy is close_only: for is_replay=1, only reduce-only intents are allowed.
+- Replay policy is enforced after hard risk checks.
+- MVP only supports replay_policy=close_only; any other value is rejected with reason_code=replay_policy_unsupported.
 
 ## Sizing Notes
 - Use delta sizing for PositionDeltaEvent.

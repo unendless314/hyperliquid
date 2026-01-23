@@ -219,6 +219,7 @@ class ExecutionService:
                 symbol=intent.symbol,
                 nonce=generate_nonce(),
             ),
+            strategy_version=intent.strategy_version,
             symbol=intent.symbol,
             side=intent.side,
             order_type="MARKET",

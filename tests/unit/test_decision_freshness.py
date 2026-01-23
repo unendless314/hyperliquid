@@ -25,7 +25,7 @@ def _event(timestamp_ms: int) -> PositionDeltaEvent:
 
 def test_fresh_event_passes() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=1000),
+        config=DecisionConfig(max_stale_ms=1000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )
@@ -35,7 +35,7 @@ def test_fresh_event_passes() -> None:
 
 def test_stale_event_rejected() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000),
+        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )
@@ -45,7 +45,7 @@ def test_stale_event_rejected() -> None:
 
 def test_missing_timestamp_rejected_when_enabled() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000),
+        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )
@@ -55,7 +55,7 @@ def test_missing_timestamp_rejected_when_enabled() -> None:
 
 def test_future_event_within_skew_allowed() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000),
+        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )
@@ -65,7 +65,7 @@ def test_future_event_within_skew_allowed() -> None:
 
 def test_future_event_rejected_beyond_skew() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000),
+        config=DecisionConfig(max_stale_ms=1000, max_future_ms=2000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )
@@ -75,7 +75,7 @@ def test_future_event_rejected_beyond_skew() -> None:
 
 def test_stale_check_disabled_allows_past_event() -> None:
     service = DecisionService(
-        config=DecisionConfig(max_stale_ms=0, max_future_ms=2000),
+        config=DecisionConfig(max_stale_ms=0, max_future_ms=2000, strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
         now_ms_provider=lambda: 2_000,
     )

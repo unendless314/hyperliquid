@@ -23,6 +23,9 @@ NowMsProvider = Callable[[], int]
 PriceProvider = Callable[[str], Optional[PriceSnapshot]]
 FiltersProvider = Callable[[str], Optional[SymbolFilters]]
 
+SUPPORTED_STRATEGY_VERSIONS = {"v1"}
+SUPPORTED_REPLAY_POLICIES = {"close_only"}
+
 
 @dataclass(frozen=True)
 class DecisionInputs:
@@ -71,6 +74,12 @@ class DecisionService:
         if safety_mode == "HALT":
             return []
 
+        if not self._validate_strategy_version(event):
+            return []
+
+        if not self._validate_replay_policy(event):
+            return []
+
         if self._is_blacklisted(event.symbol):
             self._log_reject(reasons.BLACKLISTED_SYMBOL, event)
             return []
@@ -79,11 +88,11 @@ class DecisionService:
         if not intents:
             return []
 
-        intents = self._apply_policy_gates(intents, safety_mode, event.is_replay)
+        intents = self._apply_risk_checks(intents, event, inputs)
         if not intents:
             return []
 
-        intents = self._apply_risk_checks(intents, event, inputs)
+        intents = self._apply_policy_gates(intents, safety_mode, event.is_replay, event)
         return intents
 
     @staticmethod
@@ -93,6 +102,7 @@ class DecisionService:
         side: str,
         qty: float,
         reduce_only: int,
+        strategy_version: str,
         suffix: str | None = None,
         risk_notes: Optional[str] = None,
     ) -> OrderIntent:
@@ -101,6 +111,7 @@ class DecisionService:
                 event.tx_hash, event.event_index, event.symbol, suffix=suffix
             ),
             client_order_id=None,
+            strategy_version=strategy_version,
             symbol=event.symbol,
             side=side,
             order_type="MARKET",
@@ -117,8 +128,9 @@ class DecisionService:
     def _build_intents(
         self, event: PositionDeltaEvent, inputs: DecisionInputs
     ) -> List[OrderIntent]:
+        strategy_version = self._strategy_version_value()
         if event.action_type == "FLIP":
-            return self._build_flip_intents(event, inputs)
+            return self._build_flip_intents(event, inputs, strategy_version)
 
         if event.action_type == "DECREASE":
             close_qty, close_reason = self._compute_close_qty(event, inputs)
@@ -132,6 +144,7 @@ class DecisionService:
                     side=close_side,
                     qty=close_qty,
                     reduce_only=reduce_only_for_action(event.action_type),
+                    strategy_version=strategy_version,
                 )
             ]
 
@@ -146,11 +159,12 @@ class DecisionService:
                 side=side,
                 qty=qty,
                 reduce_only=reduce_only_for_action(event.action_type),
+                strategy_version=strategy_version,
             )
         ]
 
     def _build_flip_intents(
-        self, event: PositionDeltaEvent, inputs: DecisionInputs
+        self, event: PositionDeltaEvent, inputs: DecisionInputs, strategy_version: str
     ) -> List[OrderIntent]:
         if event.close_component is None or event.open_component is None:
             raise ValueError("FLIP requires close_component and open_component")
@@ -175,6 +189,7 @@ class DecisionService:
                     side=close_side,
                     qty=close_qty,
                     reduce_only=reduce_only_for_action(event.action_type, "close"),
+                    strategy_version=strategy_version,
                     suffix="close",
                 )
             )
@@ -186,21 +201,49 @@ class DecisionService:
                     side=open_side,
                     qty=open_qty,
                     reduce_only=reduce_only_for_action(event.action_type, "open"),
+                    strategy_version=strategy_version,
                     suffix="open",
                 )
             )
         return intents
 
     def _apply_policy_gates(
-        self, intents: List[OrderIntent], safety_mode: str, is_replay: int
+        self,
+        intents: List[OrderIntent],
+        safety_mode: str,
+        is_replay: int,
+        event: PositionDeltaEvent,
     ) -> List[OrderIntent]:
         if safety_mode == "ARMED_SAFE":
             intents = [intent for intent in intents if intent.reduce_only == 1]
         if is_replay:
             policy = self._replay_policy_provider()
-            if policy == "close-only":
-                intents = [intent for intent in intents if intent.reduce_only == 1]
+            if policy == "close_only":
+                filtered = [intent for intent in intents if intent.reduce_only == 1]
+                if intents and not filtered:
+                    self._log_reject(reasons.REPLAY_POLICY_BLOCKED, event)
+                intents = filtered
         return intents
+
+    def _validate_strategy_version(self, event: PositionDeltaEvent) -> bool:
+        strategy_version = self.config.strategy_version
+        if strategy_version is None or not str(strategy_version).strip():
+            self._log_reject(reasons.STRATEGY_VERSION_MISSING, event)
+            return False
+        if str(strategy_version) not in SUPPORTED_STRATEGY_VERSIONS:
+            self._log_reject(reasons.STRATEGY_VERSION_UNSUPPORTED, event)
+            return False
+        return True
+
+    def _validate_replay_policy(self, event: PositionDeltaEvent) -> bool:
+        policy = self._replay_policy_provider()
+        if policy not in SUPPORTED_REPLAY_POLICIES:
+            self._log_reject(reasons.REPLAY_POLICY_UNSUPPORTED, event)
+            return False
+        return True
+
+    def _strategy_version_value(self) -> str:
+        return str(self.config.strategy_version)
 
     def _apply_risk_checks(
         self,

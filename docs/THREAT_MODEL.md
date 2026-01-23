@@ -21,9 +21,8 @@
 
 4) Unsafe exposure increase
 - Risk: system adds risk during uncertainty
-- Mitigation: ARMED_SAFE gate; replay_policy close-only by default
+- Mitigation: ARMED_SAFE gate; replay_policy close_only by default
 
 5) Storage corruption or loss
 - Risk: cursor and idempotency state lost
 - Mitigation: WAL, backups, and HALT on storage errors
-

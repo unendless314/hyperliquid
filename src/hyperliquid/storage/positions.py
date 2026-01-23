@@ -19,6 +19,7 @@ def load_local_positions_from_orders(conn) -> Dict[str, float]:
             continue
         data = json.loads(intent_payload)
         data.setdefault("client_order_id", None)
+        data.setdefault("strategy_version", None)
         intent = OrderIntent(**data)
         symbol = normalize_execution_symbol(intent.symbol)
         sign = 1.0 if intent.side == "BUY" else -1.0

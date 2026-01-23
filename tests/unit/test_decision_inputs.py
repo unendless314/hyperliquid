@@ -41,7 +41,7 @@ def _increase_event() -> PositionDeltaEvent:
 
 def test_missing_local_position_rejects_decrease() -> None:
     service = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
     )
     inputs = DecisionInputs(safety_mode="ARMED_LIVE", local_current_position=None, closable_qty=1.0)
@@ -51,7 +51,7 @@ def test_missing_local_position_rejects_decrease() -> None:
 
 def test_missing_closable_qty_rejects_decrease() -> None:
     service = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
     )
     inputs = DecisionInputs(safety_mode="ARMED_LIVE", local_current_position=1.0, closable_qty=None)
@@ -61,7 +61,7 @@ def test_missing_closable_qty_rejects_decrease() -> None:
 
 def test_missing_local_position_allows_increase() -> None:
     service = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider,
     )
     inputs = DecisionInputs(safety_mode="ARMED_LIVE", local_current_position=None, closable_qty=None)

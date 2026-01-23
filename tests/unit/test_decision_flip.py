@@ -25,7 +25,7 @@ def _flip_event() -> PositionDeltaEvent:
 
 def test_flip_generates_distinct_intents() -> None:
     service = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider("ARMED_LIVE"),
     )
     inputs = DecisionInputs(
@@ -43,7 +43,7 @@ def test_flip_generates_distinct_intents() -> None:
 
 def test_flip_in_armed_safe_keeps_reduce_only() -> None:
     service = DecisionService(
-        config=DecisionConfig(),
+        config=DecisionConfig(strategy_version="v1"),
         safety_mode_provider=_safety_mode_provider("ARMED_SAFE"),
     )
     inputs = DecisionInputs(
