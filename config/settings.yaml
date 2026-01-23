@@ -54,6 +54,7 @@ decision:
     kelly_win_rate: 0.0
     kelly_edge: 0.0
     kelly_fraction: 1.0
+    max_qty: 0.0
 execution:
   tif_seconds: 5
   order_poll_interval_sec: 2

@@ -157,16 +157,31 @@ class StrategyV1:
             return 0.0, reasons.SIZING_INVALID
         sizing = self.config.sizing
         if sizing.mode == "fixed":
-            return float(sizing.fixed_qty), None
+            qty = float(sizing.fixed_qty)
+            return self._apply_max_qty(qty)
         if sizing.mode == "proportional":
-            return float(base_qty * sizing.proportional_ratio), None
+            qty = float(base_qty * sizing.proportional_ratio)
+            return self._apply_max_qty(qty)
         if sizing.mode == "kelly":
             win_rate = sizing.kelly_win_rate
             edge = sizing.kelly_edge
             if win_rate <= 0 or edge <= 0:
                 return 0.0, reasons.KELLY_PARAMS_MISSING
+            if win_rate > 1:
+                return 0.0, reasons.SIZING_INVALID
             kelly_fraction = win_rate - ((1 - win_rate) / edge)
             if kelly_fraction <= 0:
                 return 0.0, reasons.SIZING_INVALID
-            return float(base_qty * kelly_fraction * sizing.kelly_fraction), None
+            if sizing.kelly_fraction <= 0:
+                return 0.0, reasons.SIZING_INVALID
+            qty = float(base_qty * kelly_fraction * sizing.kelly_fraction)
+            return self._apply_max_qty(qty)
         return 0.0, reasons.SIZING_INVALID
+
+    def _apply_max_qty(self, qty: float) -> tuple[float, Optional[str]]:
+        if qty <= 0:
+            return 0.0, reasons.SIZING_INVALID
+        max_qty = float(self.config.sizing.max_qty)
+        if max_qty > 0 and qty > max_qty:
+            return 0.0, reasons.SIZING_INVALID
+        return qty, None

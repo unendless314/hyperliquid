@@ -12,6 +12,7 @@ class SizingConfig:
     kelly_win_rate: float = 0.0
     kelly_edge: float = 0.0
     kelly_fraction: float = 1.0
+    max_qty: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -63,5 +64,6 @@ class DecisionConfig:
                 kelly_win_rate=float(sizing_raw.get("kelly_win_rate", 0.0)),
                 kelly_edge=float(sizing_raw.get("kelly_edge", 0.0)),
                 kelly_fraction=float(sizing_raw.get("kelly_fraction", 1.0)),
+                max_qty=float(sizing_raw.get("max_qty", 0.0)),
             ),
         )

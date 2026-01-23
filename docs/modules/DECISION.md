@@ -41,6 +41,11 @@ Acceptance criteria for Story 2.1 strategy rollout:
 - Rejections must include a stable reason_code. Required: replay_policy_blocked, strategy_version_missing, strategy_version_unsupported, replay_policy_unsupported.
 - Strategy version bumps are documented with behavior changes and tests updated accordingly.
 
+StrategyV1 behavior (current):
+- Builds intents via sizing rules (fixed/proportional/kelly) and applies FLIP ordering as close then open.
+- Always attaches strategy_version to emitted OrderIntents.
+- Deterministic output ordering for the same input + strategy_version.
+
 ## Partial Fill Policy
 - Partial fills are treated as normal market behavior.
 - Partial fills do not block or downgrade future INCREASE intents.
@@ -64,6 +69,7 @@ Exposure-increasing intents are blocked only when:
   - target_close_ratio = min(1, abs(delta_target_net_position) / abs(prev_target_net_position))
   - local_close_qty = abs(local_current_position) * target_close_ratio
   - Cap by closable_qty and apply reduce-only
+- max_qty=0 means no limit; if computed qty exceeds max_qty, reject the intent.
 
 ## Closable Quantity
 - closable_qty is the local position size available for reduce-only orders.

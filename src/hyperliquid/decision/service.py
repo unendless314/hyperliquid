@@ -166,19 +166,24 @@ class DecisionService:
                     return []
 
         risk_notes: List[str] = []
+
+        def add_note(note: str) -> None:
+            if note not in risk_notes:
+                risk_notes.append(note)
+
         if reference_price is None:
             if self.config.price_failure_policy != "reject":
-                risk_notes.append(
+                add_note(
                     reasons.STALE_PRICE
                     if reference_stale
                     else reasons.MISSING_REFERENCE_PRICE
                 )
         elif reference_price.source == "fallback":
-            risk_notes.append(reasons.PRICE_FALLBACK_USED)
+            add_note(reasons.PRICE_FALLBACK_USED)
 
         if filters is None and self.config.filters_enabled:
             if self.config.filters_failure_policy != "reject":
-                risk_notes.append(reasons.FILTERS_UNAVAILABLE)
+                add_note(reasons.FILTERS_UNAVAILABLE)
 
         if self.config.slippage_cap_pct > 0:
             expected_price = inputs.expected_price
@@ -196,7 +201,7 @@ class DecisionService:
                     )
                     self._log_reject(reason, event)
                     return []
-                risk_notes.append(
+                add_note(
                     reasons.STALE_EXPECTED_PRICE
                     if expected_stale
                     else reasons.MISSING_EXPECTED_PRICE
@@ -210,7 +215,7 @@ class DecisionService:
                     )
                     self._log_reject(reason, event)
                     return []
-                risk_notes.append(
+                add_note(
                     reasons.STALE_PRICE
                     if reference_stale
                     else reasons.MISSING_REFERENCE_PRICE

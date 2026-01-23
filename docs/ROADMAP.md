@@ -59,13 +59,13 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Adapters can be wired without hitting live APIs
 
 ## Epic 2: Decision engine
-- [~] Story 2.1: Decision rules skeleton
+- [x] Story 2.1: Decision rules skeleton
   - [x] Task: Implement decision service interface in src/hyperliquid/decision/service.py
   - [x] Task: Define decision request/response models
   - [x] Task: Add contract version assertion on decision inputs/outputs
   - [x] Task: Add replay policy gate (close_only)
   - [x] Task: Wire expected_price from ingest events into DecisionInputs (slippage checks)
-  - Acceptance: Decision service returns deterministic placeholder actions (strategy rules/versioning not implemented yet)
+  - Acceptance: StrategyV1 implemented with deterministic outputs; strategy_version enforced and attached to OrderIntent
 
 - [x] Story 2.2: Strategy constraints
   - [x] Task: Implement sizing/risk constraints per docs/modules/DECISION.md

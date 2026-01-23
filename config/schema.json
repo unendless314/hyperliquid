@@ -265,6 +265,10 @@
             "kelly_fraction": {
               "type": "number",
               "minimum": 0
+            },
+            "max_qty": {
+              "type": "number",
+              "minimum": 0
             }
           }
         }
