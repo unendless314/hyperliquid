@@ -1,5 +1,5 @@
 # Ops Validation Run
-date_utc=2026-01-24T01:55:46Z
+date_utc=2026-01-24T02:10:02Z
 operator=unknown
 environment=local
 mode=unspecified
@@ -19,31 +19,73 @@ hash_config_stderr:
 - (empty)
 config_schema=ok
 config_hash=074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
-local_time_ms=1769219746989
-exchange_time_ms=1769219747140
+local_time_ms=1769220602818
+exchange_time_ms=1769220603155
 schema_version=ok
 
 ## Post-Start
 safety_mode=ARMED_SAFE
-safety_reason_code=BOOTSTRAP
-safety_reason_message=Initial bootstrap state
+safety_reason_code=SMOKE_TEST_CLEAR
+safety_reason_message=Smoke test clear
 last_processed_timestamp_ms=1765597613825
 last_processed_event_key=1765597613825|302525198149075|0x8dd60f1afdda1bc88f4f0431485e0302016e000098dd3a9a319eba6dbcddf5b3|BTCUSDT
 order_results_count=0
-audit_log_count=0
-note=example_merged_from_multiple_runs
+audit_log_count=2
 metrics_tail:
 - [METRICS] {"ts": "2026-01-22T16:45:40.978070+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_LIVE", "reason": "OK"}}
 - [METRICS] {"ts": "2026-01-22T16:45:41.273419+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
 - [METRICS] {"ts": "2026-01-24T01:55:43.532325+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:09:50.791238+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
 
-## Safety Reset Evidence (tools/ops_reset_safety.py)
-timestamp_utc=2026-01-24T02:05:00Z
-db_path=data/hyperliquid_testnet.db
-previous_mode=HALT
-previous_reason_code=BACKFILL_WINDOW_EXCEEDED
-previous_reason_message=Gap exceeds backfill window
-new_mode=ARMED_SAFE
-new_reason_code=MAINTENANCE_SKIP
-new_reason_message=Maintenance skip reset
-status=ok
+## A1 Preflight Evidence (tools/ops_preflight.py)
+config_hash=074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
+local_time_ms=1769220694110
+exchange_time_ms=1769220694494
+schema_version=ok
+
+## A2 Mode-Specific Evidence (summary)
+note=example_merged_from_multiple_runs
+dry_run_with_maintenance_skip=true
+dry_run_evidence_path=/tmp/ops_a2_dryrun_skip.txt
+dry_run_safety_mode=ARMED_SAFE
+dry_run_reason_code=MAINTENANCE_SKIP_GAP
+dry_run_last_processed_timestamp_ms=1769220765026
+dry_run_metrics_tail_ts=2026-01-24T02:12:45.182187+00:00
+backfill_only_with_maintenance_skip=true
+backfill_only_evidence_path=/tmp/ops_a2_backfill_skip.txt
+backfill_only_safety_mode=ARMED_SAFE
+backfill_only_reason_code=MAINTENANCE_SKIP_GAP
+backfill_only_last_processed_timestamp_ms=1769220765026
+backfill_only_metrics_tail_ts=2026-01-24T02:12:54.706210+00:00
+live_stub_evidence_path=/tmp/ops_a2_live_stub.txt
+live_stub_safety_mode=ARMED_SAFE
+live_stub_reason_code=CONFIG_HASH_CHANGED
+live_stub_last_processed_timestamp_ms=1769220765026
+live_stub_metrics_tail_ts=2026-01-24T02:13:04.477030+00:00
+
+## A3 Failure Path Evidence (summary)
+note=example_merged_from_multiple_runs
+schema_version_mismatch_db=data/ops_schema.db
+schema_version_mismatch_safety_mode=HALT
+schema_version_mismatch_reason_code=SCHEMA_VERSION_MISMATCH
+schema_version_mismatch_reason_message=DB schema version mismatch
+backfill_window_exceeded_db=data/ops_backfill.db
+backfill_window_exceeded_safety_mode=HALT
+backfill_window_exceeded_reason_code=BACKFILL_WINDOW_EXCEEDED
+backfill_window_exceeded_reason_message=Gap exceeds backfill window
+reconcile_critical_evidence_path=/tmp/ops_a3_reconcile.txt
+reconcile_critical_safety_mode=HALT
+reconcile_critical_reason_code=RECONCILE_CRITICAL
+reconcile_critical_reason_message=Missing symbols detected: missing_local=['ZZZUSDT'] missing_exchange=[]
+retry_budget_exceeded_evidence_path=/tmp/ops_a3_retry.txt
+retry_budget_exceeded_safety_mode=ARMED_SAFE
+retry_budget_exceeded_reason_code=EXECUTION_RETRY_BUDGET_EXCEEDED
+retry_budget_exceeded_reason_message=Execution retry budget exceeded; requires operator review
+
+## Supplemental Evidence (testnet execution adapter enabled)
+note=example_merged_from_multiple_runs
+evidence_path=/tmp/ops_live_testnet.txt
+safety_mode=ARMED_SAFE
+reason_code=CONFIG_HASH_CHANGED
+last_processed_timestamp_ms=1769220765026
+metrics_tail_ts=2026-01-24T02:18:59.243830+00:00
