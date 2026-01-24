@@ -1,26 +1,49 @@
 # Ops Validation Run
-date_utc=2026-01-22T16:45:46Z
+date_utc=2026-01-24T01:55:46Z
 operator=unknown
 environment=local
-mode=live
-db_path=data/hyperliquid_testnet_a2b.db
+mode=unspecified
+db_path=data/hyperliquid_testnet.db
 status=ok
 
 ## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
+hash_config_stderr:
+- (empty)
 config_schema=ok
-config_hash=65945d75c2efce3a66298c1cb69af465f1734f08fd75320470327a6f04e06178
-local_time_ms=1769100346954
-exchange_time_ms=1769100347244
+config_hash=074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
+local_time_ms=1769219746989
+exchange_time_ms=1769219747140
 schema_version=ok
 
 ## Post-Start
-safety_mode=ARMED_LIVE
-safety_reason_code=OK
-safety_reason_message=Drift within thresholds
+safety_mode=ARMED_SAFE
+safety_reason_code=BOOTSTRAP
+safety_reason_message=Initial bootstrap state
 last_processed_timestamp_ms=1765597613825
 last_processed_event_key=1765597613825|302525198149075|0x8dd60f1afdda1bc88f4f0431485e0302016e000098dd3a9a319eba6dbcddf5b3|BTCUSDT
 order_results_count=0
-audit_log_count=1
+audit_log_count=0
+note=example_merged_from_multiple_runs
 metrics_tail:
 - [METRICS] {"ts": "2026-01-22T16:45:40.978070+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_LIVE", "reason": "OK"}}
 - [METRICS] {"ts": "2026-01-22T16:45:41.273419+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T01:55:43.532325+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+
+## Safety Reset Evidence (tools/ops_reset_safety.py)
+timestamp_utc=2026-01-24T02:05:00Z
+db_path=data/hyperliquid_testnet.db
+previous_mode=HALT
+previous_reason_code=BACKFILL_WINDOW_EXCEEDED
+previous_reason_message=Gap exceeds backfill window
+new_mode=ARMED_SAFE
+new_reason_code=MAINTENANCE_SKIP
+new_reason_message=Maintenance skip reset
+status=ok

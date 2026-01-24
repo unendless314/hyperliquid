@@ -126,6 +126,9 @@ see the technical docs referenced in docs/README.md.
 - [ ] Story 6.2: Ops validation
   - [x] Task: A2 live testnet validation evidence recorded (2026-01-22)
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
+  - [x] Task: Define Go/No-Go rehearsal evidence format + storage location (ops evidence) (2026-01-24)
+  - [x] Task: Run tools/validate_config.py + tools/hash_config.py during ops flow and attach outputs to ops evidence (2026-01-24)
+  - [ ] Task: After DB schema v3 rebuild, run smoke check (startup + audit_log write) and attach evidence
   - Acceptance: Manual ops checklist is executable (full ops checklist not completed yet)
 
 ## Handoff Notes (2026/01/23)
@@ -151,8 +154,10 @@ see the technical docs referenced in docs/README.md.
   ### Remaining Work (next milestone)
 
   1. Complete Story 6.2 ops validation by running full RUNBOOK flows and capturing evidence.
-  2. Formalize/execute Production Go/No-Go checklist with evidence (monitoring, alerting, rollback rehearsal).
-  3. Optional: address pytest-asyncio warning (loop scope default).
+  2. Define Go/No-Go evidence format + storage location; include config validation/hash outputs in evidence.
+  3. After DB schema v3 rebuild, run smoke check (startup + audit_log write) and capture evidence.
+  4. Formalize/execute Production Go/No-Go checklist with evidence (monitoring, alerting, rollback rehearsal).
+  5. Optional: address pytest-asyncio warning (loop scope default).
 
   ### Notes / Risks
 

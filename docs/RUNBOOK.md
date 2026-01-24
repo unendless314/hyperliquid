@@ -108,7 +108,7 @@ Failure/rollback:
 - If cursor does not advance or safety_mode == HALT, stop process and follow incident response.
 
 ## Production Readiness (Go/No-Go)
-Checklist (record evidence in ops validation notes):
+Checklist (record evidence using docs/OPS_VALIDATION.md; keep evidence in docs/ops_validation_run.txt):
 - Config validated and config_hash recorded (Startup steps 1-2 completed).
 - Scripted preflight + post-start checks completed with expected output.
 - Ops validation bundle captured (docs/ops_validation_run.txt updated for this run).
@@ -153,6 +153,30 @@ Maintenance restart:
   - Recent fills align with the intended restart window.
 - Manually promote to ARMED_LIVE after verifying positions.
 - Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
+
+## Long Downtime Recovery (Gap Exceeded)
+Use this flow when the system has been offline long enough to exceed backfill_window_ms.
+Goal: recover safely with auditable evidence and avoid silent cursor jumps.
+
+Steps:
+1. If safety_mode is HALT with BACKFILL_WINDOW_EXCEEDED, clear the HALT state first:
+   - Preferred: rebuild DB if required by schema version (see docs/DATA_MODEL.md) or if cursor is stale beyond recovery.
+   - Alternate: reset safety state with an auditable tool before proceeding:
+     - PYTHONPATH=src python3 tools/ops_reset_safety.py --config config/settings.yaml --schema config/schema.json --mode ARMED_SAFE --reason-code MAINTENANCE_SKIP --reason-message "Maintenance skip reset"
+     - Save tool output in docs/ops_validation_run.txt (or append to ops evidence).
+2. Set `ingest.maintenance_skip_gap=true` in config/settings.yaml for a single controlled restart.
+3. Start in dry-run mode to validate state without execution:
+   - PYTHONPATH=src python3 src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
+4. Capture evidence:
+   - PYTHONPATH=src python3 tools/ops_validate_run.py --config config/settings.yaml --schema config/schema.json --exchange-time --metrics-tail 5 --output docs/ops_validation_run.txt
+5. Verify and record:
+   - safety_mode=ARMED_SAFE and safety_reason_code indicates maintenance skip
+   - last_processed_timestamp_ms updated to a recent value
+   - metrics_tail shows current timestamps
+6. Revert `ingest.maintenance_skip_gap=false` and restart in the target mode.
+
+Evidence:
+- Record the maintenance skip toggle, cursor update, and any manual checks in docs/OPS_VALIDATION.md (Go/No-Go evidence section).
 
 ### 4) Repeated Order Failures
 Checklist:

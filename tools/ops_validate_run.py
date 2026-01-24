@@ -1,6 +1,8 @@
 import argparse
 import json
 import sqlite3
+import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib import request
@@ -26,6 +28,27 @@ def _tail_lines(path: Path, count: int) -> list[str]:
     if not path.exists():
         return ["metrics_log_missing"]
     return path.read_text().splitlines()[-count:]
+
+def _run_tool(args: list[str]) -> tuple[int, str, str]:
+    result = subprocess.run(args, capture_output=True, text=True)
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+def _append_tool_output(
+    lines: list[str], label: str, exit_code: int, stdout: str, stderr: str
+) -> None:
+    _print_kv(lines, f"{label}_exit_code", exit_code)
+    lines.append(f"{label}_stdout:")
+    if stdout:
+        for line in stdout.splitlines():
+            lines.append(f"- {line}")
+    else:
+        lines.append("- (empty)")
+    lines.append(f"{label}_stderr:")
+    if stderr:
+        for line in stderr.splitlines():
+            lines.append(f"- {line}")
+    else:
+        lines.append("- (empty)")
 
 
 def main() -> int:
@@ -64,6 +87,25 @@ def main() -> int:
     lines.append("")
 
     lines.append("## Preflight")
+    validate_args = [
+        sys.executable,
+        "tools/validate_config.py",
+        "--config",
+        str(config_path),
+        "--schema",
+        str(schema_path),
+    ]
+    rc, out, err = _run_tool(validate_args)
+    _append_tool_output(lines, "validate_config", rc, out, err)
+    if rc != 0:
+        status = "fail"
+
+    hash_args = [sys.executable, "tools/hash_config.py", "--config", str(config_path)]
+    rc, out, err = _run_tool(hash_args)
+    _append_tool_output(lines, "hash_config", rc, out, err)
+    if rc != 0:
+        status = "fail"
+
     _print_kv(lines, "config_schema", "ok")
     _print_kv(lines, "config_hash", compute_config_hash(config_path))
     _print_kv(lines, "local_time_ms", int(time.time() * 1000))
