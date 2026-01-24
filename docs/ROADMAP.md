@@ -94,6 +94,10 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add unit tests for mapping/duplicate/symbol normalization
   - Acceptance: Execution flow can be simulated end-to-end (testnet ops validation only; no production validation yet)
 
+  - [x] Task: Testnet live trading validation (reduce-only market orders + order_results/audit_log evidence) (2026-01-24)
+  - [x] Task: Filters validation with filters_enabled=true (reject min_notional + reduce-only pass) (2026-01-24)
+  - [ ] Task: Production live trading validation (pending)
+
 ## Epic 4: Safety + reconciliation
 - [~] Story 4.1: Safety service skeleton
   - [x] Task: Implement safety service interface in src/hyperliquid/safety/service.py
@@ -123,7 +127,7 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Run key integration set and record results (2026-01-22)
   - Acceptance: Tests pass locally per docs/TEST_PLAN.md
 
-- [ ] Story 6.2: Ops validation
+- [x] Story 6.2: Ops validation (2026-01-24)
   - [x] Task: A2 live testnet validation evidence recorded (2026-01-22)
   - [ ] Task: Validate operational flows per docs/RUNBOOK.md
   - [x] Task: Define Go/No-Go rehearsal evidence format + storage location (ops evidence) (2026-01-24)
@@ -169,4 +173,23 @@ see the technical docs referenced in docs/README.md.
 - Recreate DB after schema changes (audit_log uses schema v3)
 - Run key unit tests: decision_slippage, filters, audit_log
 - Verify decision config defaults (replay_policy, slippage_cap_pct, price_failure_policy)
-- Review RUNBOOK checklist before any live enablement
+  - Review RUNBOOK checklist before any live enablement
+
+## Handoff Notes (2026/01/24)
+
+  ### Story 6.2 Ops Validation Complete
+
+  - Status: Story 6.2 completed (2026-01-24).
+  - Evidence: docs/ops_validation_run.txt is the single source of truth (A1–A3, Go/No-Go rehearsal, maintenance skip/reset evidence).
+  - Go/No-Go rehearsal:
+    - Failure evidence retained (BACKFILL_WINDOW_EXCEEDED).
+    - Pass evidence captured in dry-run (note=go_nogo_rehearsal_pass).
+  - Supplemental evidence: testnet execution adapter run recorded at /tmp/ops_live_testnet.txt (copy into docs/ or logs/ if long-term retention is required).
+
+  ### Pre-Production Minimal Checklist (recommended)
+
+  - Confirm config/settings.yaml uses production environment (endpoints, risk limits, wallet).
+  - Run tools/validate_config.py + tools/hash_config.py and record config hash.
+  - Ensure RUNBOOK Go/No-Go checklist is complete (monitoring/alerting/rollback).
+  - Verify DB v3 rebuilt + smoke check passed.
+  - Validate safety reconcile with real execution adapter.

@@ -89,3 +89,91 @@ safety_mode=ARMED_SAFE
 reason_code=CONFIG_HASH_CHANGED
 last_processed_timestamp_ms=1769220765026
 metrics_tail_ts=2026-01-24T02:18:59.243830+00:00
+
+## Go/No-Go Rehearsal Evidence (dry-run)
+note=go_nogo_rehearsal
+evidence_path=/tmp/ops_go_nogo_dryrun.txt
+safety_mode=HALT
+reason_code=BACKFILL_WINDOW_EXCEEDED
+last_processed_timestamp_ms=1769220765026
+metrics_tail_ts=2026-01-24T02:26:08.232996+00:00
+
+## Go/No-Go Rehearsal Evidence (dry-run pass)
+note=go_nogo_rehearsal_pass
+evidence_path=/tmp/ops_go_nogo_dryrun_pass.txt
+safety_mode=ARMED_SAFE
+reason_code=CONFIG_HASH_CHANGED
+last_processed_timestamp_ms=1769221649650
+metrics_tail_ts=2026-01-24T02:27:39.814763+00:00
+
+## Go/No-Go Maintenance Skip + Reset Evidence
+note=go_nogo_rehearsal_pass_supporting_steps
+maintenance_skip_gap_enabled=true
+maintenance_skip_event_ts=2026-01-24T02:27:29.650883+00:00
+maintenance_skip_cursor_ts=1769221649650
+maintenance_skip_gap_enabled_after=false
+reset_tool_output_timestamp_utc=2026-01-24T02:27:21Z
+reset_tool_output_db_path=data/hyperliquid_testnet.db
+reset_tool_output_previous_mode=HALT
+reset_tool_output_previous_reason_code=BACKFILL_WINDOW_EXCEEDED
+reset_tool_output_previous_reason_message=Gap exceeds backfill window
+reset_tool_output_new_mode=ARMED_SAFE
+reset_tool_output_new_reason_code=GO_NOGO_RESET
+reset_tool_output_new_reason_message=Go/No-Go reset
+reset_tool_output_status=ok
+
+## Epic 5 Persistence restart evidence (dry-run)
+note=example_merged_from_multiple_runs
+run1_evidence_path=/tmp/ops_persistence_run1.txt
+run1_safety_mode=ARMED_SAFE
+run1_reason_code=PERSIST_CLEAR
+run1_last_processed_event_key=0|0|stubclose|BTCUSDT
+run1_order_results_count=2
+run1_audit_log_count=3
+run1_metrics_tail_ts=2026-01-24T02:39:56.850257+00:00
+run2_evidence_path=/tmp/ops_persistence_run2.txt
+run2_safety_mode=ARMED_SAFE
+run2_reason_code=PERSIST_CLEAR
+run2_last_processed_event_key=0|0|stubclose|BTCUSDT
+run2_order_results_count=2
+run2_audit_log_count=3
+run2_metrics_tail_ts=2026-01-24T02:40:24.527147+00:00
+
+## Epic 4 Safety reconcile evidence (testnet live / read-only)
+note=example_merged_from_multiple_runs
+evidence_path=/tmp/ops_epic4_reconcile.txt
+safety_mode=ARMED_SAFE
+reason_code=CONFIG_HASH_CHANGED
+last_processed_timestamp_ms=1769221649650
+metrics_tail_ts=2026-01-24T02:42:15.071334+00:00
+
+## Epic 3 Production live trading validation (testnet)
+note=example_merged_from_multiple_runs
+reduce_002_btc_evidence_path=/tmp/ops_epic3_trade_reduce.txt
+reduce_002_btc_exchange_order_id=11905601327
+reduce_002_btc_status=FILLED
+close_003_btc_evidence_path=/tmp/ops_epic3_trade_close.txt
+close_003_btc_exchange_order_id=11905642801
+close_003_btc_status=FILLED
+safety_mode=ARMED_SAFE
+reason_code=SNAPSHOT_STALE
+order_results_count=3
+audit_log_count=4
+deviations_filters_enabled=false (temporary to bypass tick_size validation for market orders)
+deviations_binance_adapter_change=Market orders no longer send timeInForce (src/hyperliquid/execution/adapters/binance.py)
+
+## Epic 3 Filters validation (testnet)
+note=filters_enabled=true
+reject_evidence_path=/tmp/ops_trade_filters_reject.txt
+reject_log_path=/tmp/ops_trade_filters_reject.log
+reject_safety_mode=ARMED_SAFE
+reject_reason_code=SNAPSHOT_STALE
+reject_order_result=none (intent rejected before execution)
+reject_error=filter_min_notional
+pass_evidence_path=/tmp/ops_trade_filters_pass.txt
+pass_query_path=/tmp/ops_trade_filters_pass_query.txt
+pass_safety_mode=ARMED_SAFE
+pass_reason_code=SNAPSHOT_STALE
+pass_order_result=SUBMITTED (exchange filled)
+pass_exchange_order_id=11905855343
+pass_error=none

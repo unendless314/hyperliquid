@@ -561,7 +561,7 @@ def _build_order_params(intent: OrderIntent) -> dict:
     }
     if intent.price is not None:
         params["price"] = _format_price(intent.price)
-    if intent.time_in_force:
+    if intent.order_type == "LIMIT" and intent.time_in_force:
         params["timeInForce"] = intent.time_in_force
     return params
 
