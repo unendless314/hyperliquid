@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T02:13:08Z
+operator=unknown
+environment=local
+mode=unspecified
+db_path=data/hyperliquid_testnet.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 67d064b3a88284f95791c791562db686f78bdde25d3042cd39dc056ba500c425
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=67d064b3a88284f95791c791562db686f78bdde25d3042cd39dc056ba500c425
+local_time_ms=1769220788570
+exchange_time_ms=1769220788761
+schema_version=ok
+
+## Post-Start
+safety_mode=ARMED_SAFE
+safety_reason_code=CONFIG_HASH_CHANGED
+safety_reason_message=Config hash changed; continuing per operator policy
+last_processed_timestamp_ms=1769220765026
+last_processed_event_key=1769220765026|0|maintenance|MAINTENANCE
+order_results_count=0
+audit_log_count=4
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T02:09:50.791238+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:12:10.514307+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:12:45.182187+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:12:54.706210+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:13:04.477030+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}

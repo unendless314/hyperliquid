@@ -46,18 +46,18 @@ schema_version=ok
 ## A2 Mode-Specific Evidence (summary)
 note=example_merged_from_multiple_runs
 dry_run_with_maintenance_skip=true
-dry_run_evidence_path=/tmp/ops_a2_dryrun_skip.txt
+dry_run_evidence_path=docs/evidence/2026-01-24-ops/ops_a2_dryrun_skip.txt
 dry_run_safety_mode=ARMED_SAFE
 dry_run_reason_code=MAINTENANCE_SKIP_GAP
 dry_run_last_processed_timestamp_ms=1769220765026
 dry_run_metrics_tail_ts=2026-01-24T02:12:45.182187+00:00
 backfill_only_with_maintenance_skip=true
-backfill_only_evidence_path=/tmp/ops_a2_backfill_skip.txt
+backfill_only_evidence_path=docs/evidence/2026-01-24-ops/ops_a2_backfill_skip.txt
 backfill_only_safety_mode=ARMED_SAFE
 backfill_only_reason_code=MAINTENANCE_SKIP_GAP
 backfill_only_last_processed_timestamp_ms=1769220765026
 backfill_only_metrics_tail_ts=2026-01-24T02:12:54.706210+00:00
-live_stub_evidence_path=/tmp/ops_a2_live_stub.txt
+live_stub_evidence_path=docs/evidence/2026-01-24-ops/ops_a2_live_stub.txt
 live_stub_safety_mode=ARMED_SAFE
 live_stub_reason_code=CONFIG_HASH_CHANGED
 live_stub_last_processed_timestamp_ms=1769220765026
@@ -73,18 +73,18 @@ backfill_window_exceeded_db=data/ops_backfill.db
 backfill_window_exceeded_safety_mode=HALT
 backfill_window_exceeded_reason_code=BACKFILL_WINDOW_EXCEEDED
 backfill_window_exceeded_reason_message=Gap exceeds backfill window
-reconcile_critical_evidence_path=/tmp/ops_a3_reconcile.txt
+reconcile_critical_evidence_path=docs/evidence/2026-01-24-ops/ops_a3_reconcile.txt
 reconcile_critical_safety_mode=HALT
 reconcile_critical_reason_code=RECONCILE_CRITICAL
 reconcile_critical_reason_message=Missing symbols detected: missing_local=['ZZZUSDT'] missing_exchange=[]
-retry_budget_exceeded_evidence_path=/tmp/ops_a3_retry.txt
+retry_budget_exceeded_evidence_path=docs/evidence/2026-01-24-ops/ops_a3_retry.txt
 retry_budget_exceeded_safety_mode=ARMED_SAFE
 retry_budget_exceeded_reason_code=EXECUTION_RETRY_BUDGET_EXCEEDED
 retry_budget_exceeded_reason_message=Execution retry budget exceeded; requires operator review
 
 ## Supplemental Evidence (testnet execution adapter enabled)
 note=example_merged_from_multiple_runs
-evidence_path=/tmp/ops_live_testnet.txt
+evidence_path=docs/evidence/2026-01-24-ops/ops_live_testnet.txt
 safety_mode=ARMED_SAFE
 reason_code=CONFIG_HASH_CHANGED
 last_processed_timestamp_ms=1769220765026
@@ -92,7 +92,7 @@ metrics_tail_ts=2026-01-24T02:18:59.243830+00:00
 
 ## Go/No-Go Rehearsal Evidence (dry-run)
 note=go_nogo_rehearsal
-evidence_path=/tmp/ops_go_nogo_dryrun.txt
+evidence_path=docs/evidence/2026-01-24-ops/ops_go_nogo_dryrun.txt
 safety_mode=HALT
 reason_code=BACKFILL_WINDOW_EXCEEDED
 last_processed_timestamp_ms=1769220765026
@@ -100,7 +100,7 @@ metrics_tail_ts=2026-01-24T02:26:08.232996+00:00
 
 ## Go/No-Go Rehearsal Evidence (dry-run pass)
 note=go_nogo_rehearsal_pass
-evidence_path=/tmp/ops_go_nogo_dryrun_pass.txt
+evidence_path=docs/evidence/2026-01-24-ops/ops_go_nogo_dryrun_pass.txt
 safety_mode=ARMED_SAFE
 reason_code=CONFIG_HASH_CHANGED
 last_processed_timestamp_ms=1769221649650
@@ -124,14 +124,14 @@ reset_tool_output_status=ok
 
 ## Epic 5 Persistence restart evidence (dry-run)
 note=example_merged_from_multiple_runs
-run1_evidence_path=/tmp/ops_persistence_run1.txt
+run1_evidence_path=docs/evidence/2026-01-24-ops/ops_persistence_run1.txt
 run1_safety_mode=ARMED_SAFE
 run1_reason_code=PERSIST_CLEAR
 run1_last_processed_event_key=0|0|stubclose|BTCUSDT
 run1_order_results_count=2
 run1_audit_log_count=3
 run1_metrics_tail_ts=2026-01-24T02:39:56.850257+00:00
-run2_evidence_path=/tmp/ops_persistence_run2.txt
+run2_evidence_path=docs/evidence/2026-01-24-ops/ops_persistence_run2.txt
 run2_safety_mode=ARMED_SAFE
 run2_reason_code=PERSIST_CLEAR
 run2_last_processed_event_key=0|0|stubclose|BTCUSDT
@@ -141,7 +141,7 @@ run2_metrics_tail_ts=2026-01-24T02:40:24.527147+00:00
 
 ## Epic 4 Safety reconcile evidence (testnet live / read-only)
 note=example_merged_from_multiple_runs
-evidence_path=/tmp/ops_epic4_reconcile.txt
+evidence_path=docs/evidence/2026-01-24-ops/ops_epic4_reconcile.txt
 safety_mode=ARMED_SAFE
 reason_code=CONFIG_HASH_CHANGED
 last_processed_timestamp_ms=1769221649650
@@ -149,10 +149,10 @@ metrics_tail_ts=2026-01-24T02:42:15.071334+00:00
 
 ## Epic 3 Production live trading validation (testnet)
 note=example_merged_from_multiple_runs
-reduce_002_btc_evidence_path=/tmp/ops_epic3_trade_reduce.txt
+reduce_002_btc_evidence_path=docs/evidence/2026-01-24-ops/ops_epic3_trade_reduce.txt
 reduce_002_btc_exchange_order_id=11905601327
 reduce_002_btc_status=FILLED
-close_003_btc_evidence_path=/tmp/ops_epic3_trade_close.txt
+close_003_btc_evidence_path=docs/evidence/2026-01-24-ops/ops_epic3_trade_close.txt
 close_003_btc_exchange_order_id=11905642801
 close_003_btc_status=FILLED
 safety_mode=ARMED_SAFE
@@ -164,16 +164,34 @@ deviations_binance_adapter_change=Market orders no longer send timeInForce (src/
 
 ## Epic 3 Filters validation (testnet)
 note=filters_enabled=true
-reject_evidence_path=/tmp/ops_trade_filters_reject.txt
-reject_log_path=/tmp/ops_trade_filters_reject.log
+reject_evidence_path=docs/evidence/2026-01-24-ops/ops_trade_filters_reject.txt
+reject_log_path=docs/evidence/2026-01-24-ops/ops_trade_filters_reject.log
 reject_safety_mode=ARMED_SAFE
 reject_reason_code=SNAPSHOT_STALE
 reject_order_result=none (intent rejected before execution)
 reject_error=filter_min_notional
-pass_evidence_path=/tmp/ops_trade_filters_pass.txt
-pass_query_path=/tmp/ops_trade_filters_pass_query.txt
+pass_evidence_path=docs/evidence/2026-01-24-ops/ops_trade_filters_pass.txt
+pass_query_path=docs/evidence/2026-01-24-ops/ops_trade_filters_pass_query.txt
 pass_safety_mode=ARMED_SAFE
 pass_reason_code=SNAPSHOT_STALE
 pass_order_result=SUBMITTED (exchange filled)
 pass_exchange_order_id=11905855343
 pass_error=none
+
+## Epic 3 Production live minimal validation (reduce-only + increase)
+note=production_live
+evidence_path=docs/evidence/2026-01-24-prod-live/ops_prod_live.txt
+reduce_query_path=docs/evidence/2026-01-24-prod-live/ops_prod_reduce_query.txt
+reduce_order_id=890475568162
+reduce_status=FILLED
+reduce_filled_qty=0.002
+reduce_avg_price=89815.1
+increase_query_path=docs/evidence/2026-01-24-prod-live/ops_prod_open_query.txt
+increase_order_id=890475575915
+increase_status=FILLED
+increase_filled_qty=0.002
+increase_avg_price=89815.2
+safety_mode=ARMED_SAFE
+reason_code=SNAPSHOT_STALE
+order_results_count=2
+audit_log_count=2

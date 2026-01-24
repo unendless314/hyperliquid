@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T02:22:13Z
+operator=unknown
+environment=local
+mode=unspecified
+db_path=data/ops_reconcile.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 7be4463057f47c3060dee7c2698ef93f1cb734e927673b703c27c4d1756b71b9
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=7be4463057f47c3060dee7c2698ef93f1cb734e927673b703c27c4d1756b71b9
+local_time_ms=1769221333256
+exchange_time_ms=1769221333412
+schema_version=ok
+
+## Post-Start
+safety_mode=HALT
+safety_reason_code=RECONCILE_CRITICAL
+safety_reason_message=Missing symbols detected: missing_local=['ZZZUSDT'] missing_exchange=[]
+last_processed_timestamp_ms=0
+last_processed_event_key=
+order_results_count=1
+audit_log_count=1
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T02:14:24.885830+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:15:04.708008+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:18:58.880337+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "CONFIG_HASH_CHANGED"}}
+- [METRICS] {"ts": "2026-01-24T02:18:59.243830+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:21:24.117344+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "HALT", "reason": "RECONCILE_CRITICAL"}}

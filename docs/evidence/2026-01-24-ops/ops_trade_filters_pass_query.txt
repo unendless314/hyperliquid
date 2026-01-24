@@ -1,0 +1,4 @@
+status=FILLED
+exchange_order_id=11905855343
+filled_qty=0.002
+avg_price=89836.2

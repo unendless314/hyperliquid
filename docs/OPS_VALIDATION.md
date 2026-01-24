@@ -103,6 +103,7 @@ Suggested fields:
   - safety_reason_code confirming maintenance skip
   - metrics_tail timestamp reflects current run
   - safety reset tool output captured (tools/ops_reset_safety.py)
+Note: Production live evidence should follow docs/RUNBOOK.md (Production Live Minimal Validation).
 
 ### SCHEMA_VERSION_MISMATCH
 - Trigger steps:

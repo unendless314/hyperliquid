@@ -1,0 +1,5 @@
+correlation_id=hl-prod-2-BTCUSDT-open
+status=FILLED
+exchange_order_id=890475575915
+filled_qty=0.002
+avg_price=89815.2

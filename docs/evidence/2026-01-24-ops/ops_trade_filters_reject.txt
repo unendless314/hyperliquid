@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T03:17:40Z
+operator=unknown
+environment=local
+mode=unspecified
+db_path=data/ops_trade_filters_reject.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 7ff7fb2afff27740967919ef4e9f772ec4d665bf0911df475b686b2f9f6c9861
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=7ff7fb2afff27740967919ef4e9f772ec4d665bf0911df475b686b2f9f6c9861
+local_time_ms=1769224660633
+exchange_time_ms=1769224660791
+schema_version=ok
+
+## Post-Start
+safety_mode=ARMED_SAFE
+safety_reason_code=SNAPSHOT_STALE
+safety_reason_message=Exchange snapshot is stale
+last_processed_timestamp_ms=1769224624082
+last_processed_event_key=1769224624082|0|stubmin|BTCUSDT
+order_results_count=1
+audit_log_count=0
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T03:09:22.346083+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T03:09:36.674975+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "SNAPSHOT_STALE"}}
+- [METRICS] {"ts": "2026-01-24T03:09:37.812861+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T03:17:26.085013+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "SNAPSHOT_STALE"}}
+- [METRICS] {"ts": "2026-01-24T03:17:26.917113+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}

@@ -120,6 +120,37 @@ Checklist (record evidence using docs/OPS_VALIDATION.md; keep evidence in docs/o
 - Key integration tests executed per docs/TEST_PLAN.md (record date + results).
 - Rollback triggers and escalation path reviewed with operator on duty.
 
+## Production Live Minimal Validation (Reduce-Only)
+Use this checklist for the smallest possible production validation with lowest risk.
+
+0) Preflight (required)
+- Confirm filters_enabled=true.
+- Confirm config/settings.yaml uses production endpoints, wallet, and risk limits.
+- Run tools/validate_config.py + tools/hash_config.py and record the hash.
+
+1) Go/No-Go (required)
+- Complete the RUNBOOK Go/No-Go checklist (monitoring/alerting/rollback).
+
+2) Minimal Live Validation (reduce-only)
+- Choose a symbol with an existing position (e.g., BTCUSDT).
+- Submit a reduce-only market order at the minimum notional (e.g., 10–50 USDT).
+
+3) Evidence (required)
+- Run tools/ops_validate_run.py to capture post-trade evidence.
+- Record:
+  - safety_mode / reason_code
+  - order_result status=FILLED
+  - exchange_order_id
+  - audit_log_count
+  - metrics_tail timestamps
+
+4) Rollback readiness
+- If any anomaly occurs, execute RUNBOOK rollback immediately.
+
+5) Closeout
+- Append evidence to docs/ops_validation_run.txt.
+- Update docs/ROADMAP.md Epic 3 acceptance to completed (with date).
+
 ## Incident Response
 
 ### 1) Entered ARMED_SAFE

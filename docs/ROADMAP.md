@@ -72,7 +72,7 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Inputs violating constraints are rejected
 
 ## Epic 3: Execution engine
-- [~] Story 3.1: Execution service skeleton
+- [x] Story 3.1: Execution service skeleton
   - [x] Task: Implement execution service interface in src/hyperliquid/execution/service.py
   - [x] Task: Define execution order models
   - [x] Task: Add safety hook placeholders for pre/post execution checks
@@ -80,9 +80,9 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Implement TIF + cancel flow (query -> cancel -> re-query)
   - [x] Task: Implement UNKNOWN recovery + retry budget with safety transitions
   - [x] Task: Implement market fallback (slippage/min_notional checks, filled_qty merge)
-  - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject (no production live trading validation yet)
+  - Acceptance: Execution service can accept and ack a mock order; pre/post safety hooks are invoked and can reject.
 
-- [~] Story 3.2: Exchange adapter skeleton
+- [x] Story 3.2: Exchange adapter skeleton
   - [x] Task: Implement adapter stubs per docs/INTEGRATIONS.md
   - [x] Task: Add idempotency + dedup placeholders
   - [x] Task: Implement REST client base (signing, time sync, retry, rate limit, error mapping)
@@ -92,14 +92,15 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add exchangeInfo filters (min_qty/step_size/min_notional/tick_size) with cache
   - [x] Task: Add mark price fetch for market notional checks
   - [x] Task: Add unit tests for mapping/duplicate/symbol normalization
-  - Acceptance: Execution flow can be simulated end-to-end (testnet ops validation only; no production validation yet)
+  - Acceptance: Execution flow can be simulated end-to-end.
 
   - [x] Task: Testnet live trading validation (reduce-only market orders + order_results/audit_log evidence) (2026-01-24)
   - [x] Task: Filters validation with filters_enabled=true (reject min_notional + reduce-only pass) (2026-01-24)
-  - [ ] Task: Production live trading validation (pending)
+  - [x] Task: Production live trading validation (reduce-only + increase) (2026-01-24)
+  - Note: Production live minimal validation steps are in docs/RUNBOOK.md (Production Live Minimal Validation).
 
 ## Epic 4: Safety + reconciliation
-- [~] Story 4.1: Safety service skeleton
+- [x] Story 4.1: Safety service skeleton
   - [x] Task: Implement safety service interface in src/hyperliquid/safety/service.py
   - [x] Task: Define reconciliation models and checks
   - [x] Task: Implement reconcile snapshots (stale snapshot, missing symbol, drift thresholds)
@@ -108,15 +109,15 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: Add safety config fields (warn/critical thresholds, snapshot staleness)
   - [x] Task: Add reconciliation unit tests
   - [x] Task: Wire startup + loop reconciliation in orchestrator (HALT on startup failure)
-  - Acceptance: Safety service can validate a mock execution state
+  - Acceptance: Safety service can validate a mock execution state.
 
 ## Epic 5: Persistence + audit
-- [~] Story 5.1: Persistence pipeline
+- [x] Story 5.1: Persistence pipeline
   - [x] Task: Implement state persistence per docs/DATA_MODEL.md (order_intents/order_results)
   - [x] Task: Add cursor + processed_txs persistence
   - [x] Task: Persist contract_version in order_results (schema bump to v2)
   - [x] Task: Add audit log entries for key state changes
-  - Acceptance: Core state can be recovered after restart
+  - Acceptance: Core state can be recovered after restart.
 
 ## Epic 6: Testing + runbook alignment
 - [x] Story 6.1: Test scaffolding
@@ -129,44 +130,11 @@ see the technical docs referenced in docs/README.md.
 
 - [x] Story 6.2: Ops validation (2026-01-24)
   - [x] Task: A2 live testnet validation evidence recorded (2026-01-22)
-  - [ ] Task: Validate operational flows per docs/RUNBOOK.md
+  - [x] Task: Validate operational flows per docs/RUNBOOK.md (2026-01-24)
   - [x] Task: Define Go/No-Go rehearsal evidence format + storage location (ops evidence) (2026-01-24)
   - [x] Task: Run tools/validate_config.py + tools/hash_config.py during ops flow and attach outputs to ops evidence (2026-01-24)
-  - [ ] Task: After DB schema v3 rebuild, run smoke check (startup + audit_log write) and attach evidence
-  - Acceptance: Manual ops checklist is executable (full ops checklist not completed yet)
-
-## Handoff Notes (2026/01/23)
-
-  ### Summary
-
-  - Completed Story 2.1 (StrategyV1 modularization, strategy_version enforcement, deterministic behavior/tests).
-  - Completed Story 6.1 test scaffolding TODOs (unit, integration, chaos), and aligned docs/TEST_PLAN.md.
-  - Added sizing max_qty and Kelly parameter validation; expanded risk rule coverage and deterministic tests.
-  - Added integration coverage for WS stale fallback to REST + backfill overlap dedup.
-
-  ### Current Config State
-
-  - config/settings.yaml reverted: safety.startup_policy=manual, db_path=data/hyperliquid_testnet.db.
-  - Testnet endpoints enabled (execution.binance.enabled=true + base_url testnet; ingest.hyperliquid.enabled=true + live).
-  - .env contains testnet API keys + HYPERLIQUID_TARGET_WALLET (not committed).
-
-  ### Evidence & Logs
-
-  - A2 live ops evidence: docs/ops_validation_run.txt (ARMED_LIVE / OK with fresh DB).
-  - Key integration set results recorded in docs/TEST_PLAN.md.
-
-  ### Remaining Work (next milestone)
-
-  1. Complete Story 6.2 ops validation by running full RUNBOOK flows and capturing evidence.
-  2. Define Go/No-Go evidence format + storage location; include config validation/hash outputs in evidence.
-  3. After DB schema v3 rebuild, run smoke check (startup + audit_log write) and capture evidence.
-  4. Formalize/execute Production Go/No-Go checklist with evidence (monitoring, alerting, rollback rehearsal).
-  5. Optional: address pytest-asyncio warning (loop scope default).
-
-  ### Notes / Risks
-
-  - DB schema bumped to v3 (audit_log table); existing DBs must be recreated if used.
-  - Slippage can use ingest-provided expected_price; if upstream does not supply it, behavior follows price_failure_policy (allow/reject/warn).
+  - [x] Task: After DB schema v3 rebuild, run smoke check (startup + audit_log write) and attach evidence (2026-01-24)
+  - Acceptance: Manual ops checklist is executable.
 
 ## Handoff Checklist
 - Confirm config schema validates: tools/validate_config.py
@@ -176,6 +144,7 @@ see the technical docs referenced in docs/README.md.
   - Review RUNBOOK checklist before any live enablement
 
 ## Handoff Notes (2026/01/24)
+  Historical handoff notes live in git history.
 
   ### Story 6.2 Ops Validation Complete
 

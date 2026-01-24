@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T02:26:11Z
+operator=unknown
+environment=local
+mode=unspecified
+db_path=data/hyperliquid_testnet.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=074386a45c1ee8d730146b8d53da9dce29817b318f9489a15f9cd4345fca37c4
+local_time_ms=1769221572063
+exchange_time_ms=1769221572498
+schema_version=ok
+
+## Post-Start
+safety_mode=HALT
+safety_reason_code=BACKFILL_WINDOW_EXCEEDED
+safety_reason_message=Gap exceeds backfill window
+last_processed_timestamp_ms=1769220765026
+last_processed_event_key=1769220765026|0|maintenance|MAINTENANCE
+order_results_count=0
+audit_log_count=5
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T02:15:04.708008+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:18:58.880337+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "CONFIG_HASH_CHANGED"}}
+- [METRICS] {"ts": "2026-01-24T02:18:59.243830+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:21:24.117344+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "HALT", "reason": "RECONCILE_CRITICAL"}}
+- [METRICS] {"ts": "2026-01-24T02:26:08.232996+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}

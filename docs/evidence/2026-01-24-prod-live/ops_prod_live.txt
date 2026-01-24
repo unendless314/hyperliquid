@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T03:41:59Z
+operator=unknown
+environment=production
+mode=unspecified
+db_path=data/hyperliquid_prod.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- 7ba3a95468d7994c9442157742259e2682eec286aff751a6efcdb6bfc5863c43
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=7ba3a95468d7994c9442157742259e2682eec286aff751a6efcdb6bfc5863c43
+local_time_ms=1769226119552
+exchange_time_ms=1769226119876
+schema_version=ok
+
+## Post-Start
+safety_mode=ARMED_SAFE
+safety_reason_code=SNAPSHOT_STALE
+safety_reason_message=Exchange snapshot is stale
+last_processed_timestamp_ms=0
+last_processed_event_key=
+order_results_count=2
+audit_log_count=2
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T03:18:22.744408+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T03:19:18.893684+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "SNAPSHOT_STALE"}}
+- [METRICS] {"ts": "2026-01-24T03:19:20.002865+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T03:41:22.166288+00:00", "name": "reconcile_max_drift", "value": 0.0, "tags": {"context": "startup", "mode": "ARMED_SAFE", "reason": "SNAPSHOT_STALE"}}
+- [METRICS] {"ts": "2026-01-24T03:41:22.166630+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}

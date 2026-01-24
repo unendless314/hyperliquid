@@ -1,0 +1,92 @@
+config_version: "0.1"
+environment: "production"
+db_path: "data/hyperliquid_prod.db"
+metrics_log_path: "logs/metrics.log"
+app_log_path: "logs/app.log"
+log_level: "INFO"
+ingest:
+  maintenance_skip_gap: false
+  backfill_window_ms: 600000
+  cursor_overlap_ms: 5000
+  hyperliquid:
+    enabled: true
+    mode: "live"
+    rest_url: "https://api.hyperliquid.xyz/info"
+    ws_url: "wss://api.hyperliquid.xyz/ws"
+    request_timeout_ms: 10000
+    symbol_map:
+      BTC: "BTCUSDT"
+    rate_limit:
+      max_requests: 10
+      per_seconds: 1
+      cooldown_seconds: 5
+    retry:
+      max_attempts: 5
+      base_delay_ms: 250
+      max_delay_ms: 5000
+      jitter_ms: 150
+    stub_events:
+      - symbol: "BTCUSDT"
+        tx_hash: "stub-boot"
+        event_index: 0
+        prev_target_net_position: 0.0
+        next_target_net_position: 0.01
+        timestamp_ms: 0
+decision:
+  max_stale_ms: 0
+  max_future_ms: 2000
+  strategy_version: "v1"
+  replay_policy: "close_only"
+  price_source: "adapter"
+  price_fallback_enabled: false
+  price_fallback_max_stale_ms: 5000
+  price_max_stale_ms: 5000
+  expected_price_max_stale_ms: 5000
+  price_failure_policy: "allow_without_price"
+  filters_enabled: true
+  filters_failure_policy: "allow_without_filters"
+  blacklist_symbols: []
+  slippage_cap_pct: 0.0
+  sizing:
+    mode: "proportional"
+    fixed_qty: 0.0
+    proportional_ratio: 1.0
+    kelly_win_rate: 0.0
+    kelly_edge: 0.0
+    kelly_fraction: 1.0
+    max_qty: 0.0
+execution:
+  tif_seconds: 5
+  order_poll_interval_sec: 2
+  retry_budget_max_attempts: 3
+  retry_budget_window_sec: 30
+  unknown_poll_interval_sec: 2
+  retry_budget_mode: "ARMED_SAFE"
+  market_fallback_enabled: false
+  market_fallback_threshold_pct: 0.1
+  market_slippage_cap_pct: 0.005
+  binance:
+    enabled: true
+    mode: "live"
+    base_url: "https://fapi.binance.com"
+    request_timeout_ms: 10000
+    recv_window_ms: 5000
+    exchange_info_enabled: true
+    exchange_info_ttl_sec: 300
+    rate_limit:
+      max_requests: 10
+      per_seconds: 1
+      cooldown_seconds: 5
+    retry:
+      max_attempts: 5
+      base_delay_ms: 250
+      max_delay_ms: 5000
+      jitter_ms: 150
+safety:
+  warn_threshold: 0.001
+  critical_threshold: 0.01
+  reconcile_interval_sec: 60
+  snapshot_max_stale_ms: 30000
+  startup_policy: "manual"
+# config_hash: 7ba3a95468d7994c9442157742259e2682eec286aff751a6efcdb6bfc5863c43
+# config_hash_recorded_at_utc: 2026-01-24T03:41:59Z

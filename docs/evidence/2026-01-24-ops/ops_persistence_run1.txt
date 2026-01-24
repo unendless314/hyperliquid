@@ -1,0 +1,39 @@
+# Ops Validation Run
+date_utc=2026-01-24T02:40:17Z
+operator=unknown
+environment=local
+mode=unspecified
+db_path=data/ops_persistence.db
+status=ok
+
+## Preflight
+validate_config_exit_code=0
+validate_config_stdout:
+- OK
+validate_config_stderr:
+- (empty)
+hash_config_exit_code=0
+hash_config_stdout:
+- d33d820e334f5994c10f97f7f3662df14a9c37b0deaac65b93261a26f5727cf8
+hash_config_stderr:
+- (empty)
+config_schema=ok
+config_hash=d33d820e334f5994c10f97f7f3662df14a9c37b0deaac65b93261a26f5727cf8
+local_time_ms=1769222417796
+exchange_time_ms=1769222418129
+schema_version=ok
+
+## Post-Start
+safety_mode=ARMED_SAFE
+safety_reason_code=PERSIST_CLEAR
+safety_reason_message=Persistence test clear
+last_processed_timestamp_ms=0
+last_processed_event_key=0|0|stubclose|BTCUSDT
+order_results_count=2
+audit_log_count=3
+metrics_tail:
+- [METRICS] {"ts": "2026-01-24T02:27:39.814763+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:36:14.557370+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:38:04.695837+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:38:59.877286+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
+- [METRICS] {"ts": "2026-01-24T02:39:56.850257+00:00", "name": "cursor_lag_ms", "value": 0, "tags": {}}
