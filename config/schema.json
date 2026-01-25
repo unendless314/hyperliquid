@@ -410,6 +410,32 @@
           "type": "string"
         }
       }
+    },
+    "orchestrator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "loop_idle_sleep_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "loop_max_idle_sleep_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "loop_active_sleep_sec": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "loop_heartbeat_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "loop_tick_warn_sec": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
     }
   }
 }

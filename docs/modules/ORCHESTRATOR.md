@@ -17,3 +17,6 @@
 ## Key Rules
 - Fail fast on invalid config
 - Dry-run must block all write paths
+- Continuous mode keeps the process running; safety gates control trading permissions.
+- Loop must avoid busy-wait (idle backoff) and emit heartbeat for ops visibility.
+- When safety_mode=HALT, the loop continues for monitoring/reconcile/ingest; trading remains blocked.

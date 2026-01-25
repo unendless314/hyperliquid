@@ -163,9 +163,12 @@ Checklist:
 ### 2) Entered HALT
 Checklist:
 - Identify reason code (e.g., BACKFILL_WINDOW_EXCEEDED, STORAGE_UNAVAILABLE, EXECUTION_ADAPTER_NOT_IMPLEMENTED)
-- Stop trading immediately (switch to HALT / stop the process)
-- Fix root cause (storage, config mismatch, position mode)
-- Restart after manual approval
+- Stop trading immediately (HALT blocks order placement).
+- If continuous mode is enabled, keep the process running for monitoring/reconcile/ingest unless isolation is required.
+- Fix root cause (storage, config mismatch, position mode).
+- Auto-recovery to ARMED_SAFE (reduce-only) is allowed only when HALT recovery conditions are satisfied (see docs/modules/SAFETY.md).
+- Auto-recovery applies only to allowlist reason_code values (see docs/modules/SAFETY.md).
+- After verification, explicitly promote to ARMED_LIVE per RUNBOOK approval steps.
 
 ### 3) Execution Retry Budget Exceeded
 Checklist:
@@ -186,6 +189,27 @@ Maintenance restart:
   - If you need to force promotion from ARMED_SAFE (not HALT), use:
     - PYTHONPATH=src python3 tools/ops_reset_safety.py --config config/settings.yaml --schema config/schema.json --mode ARMED_LIVE --reason-code MANUAL_PROMOTE --reason-message "Promote to ARMED_LIVE after verification" --allow-non-halt
 - Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
+
+### Maintenance Skip Helper Script (Temporary)
+`tools/start_live_with_maintenance_skip.sh` is a convenience helper added post‑MVP to speed up gap recovery.
+It is not a fully hardened ops tool yet; treat it as temporary and use with care.
+
+Intended use:
+- Only when safety_mode=HALT with reason_code=BACKFILL_WINDOW_EXCEEDED.
+- Operator is present and will verify positions before any promotion to ARMED_LIVE.
+- Use for a single recovery event only; do not treat this as a normal startup path.
+
+Risks/limitations:
+- Uses simple text edits on the config file; YAML layout changes can break it.
+- Does not write evidence by itself; you must record outputs in ops evidence.
+- If the process is terminated abruptly (power loss), config restoration may not complete.
+
+Operational requirements:
+- Always run config validation + hash before/after.
+- Capture evidence via tools/ops_validate_run.py and note maintenance_skip_gap toggles.
+- Prefer manual promotion to ARMED_LIVE after verification.
+If automation is desired later, convert this script into a Python tool with YAML parsing,
+dry‑run support, and explicit evidence output.
 
 ## Long Downtime Recovery (Gap Exceeded)
 Use this flow when the system has been offline long enough to exceed backfill_window_ms.

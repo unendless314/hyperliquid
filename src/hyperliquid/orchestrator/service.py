@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import time
 from typing import List, Optional
 from dataclasses import dataclass
@@ -40,7 +41,7 @@ class Orchestrator:
     mode: str
     emit_boot_event: bool = True
     run_loop: bool = False
-    loop_interval_sec: int = 5
+    loop_interval_sec: Optional[int] = None
 
     def run(self) -> None:
         logger = setup_logging(self.settings.app_log_path, self.settings.log_level)
@@ -413,24 +414,141 @@ class Orchestrator:
         )
         return coordinator.run_once(conn, mode=self.mode)
 
-    def _run_loop(self, services: dict[str, object], conn, logger, metrics, *, audit_recorder=None) -> None:
-        logger.info("loop_start", extra={"interval_sec": self.loop_interval_sec})
+    def _run_loop(
+        self,
+        services: dict[str, object],
+        conn,
+        logger,
+        metrics,
+        *,
+        audit_recorder=None,
+        max_ticks: Optional[int] = None,
+    ) -> None:
+        pipeline: Pipeline = services["pipeline"]  # type: ignore[assignment]
+        ingest: IngestService = services["ingest"]  # type: ignore[assignment]
+        ingest_config = self.settings.raw.get("ingest", {})
+        hyperliquid_cfg = ingest_config.get("hyperliquid", {})
+        coordinator = None
+        if hyperliquid_cfg.get("enabled", False):
+            coordinator = IngestCoordinator.from_settings(
+                self.settings, ingest, logger, audit_recorder=audit_recorder
+            )
+
+        loop_cfg = self.settings.raw.get("orchestrator", {})
+        idle_sleep_sec = int(loop_cfg.get("loop_idle_sleep_sec", 1))
+        max_idle_sleep_sec = int(loop_cfg.get("loop_max_idle_sleep_sec", 10))
+        active_sleep_sec = int(loop_cfg.get("loop_active_sleep_sec", 0))
+        heartbeat_sec = int(loop_cfg.get("loop_heartbeat_sec", 10))
+        tick_warn_sec = int(loop_cfg.get("loop_tick_warn_sec", 30))
+        if self.loop_interval_sec is not None:
+            idle_sleep_sec = self.loop_interval_sec
+
+        idle_sleep_sec = max(idle_sleep_sec, 1)
+        max_idle_sleep_sec = max(max_idle_sleep_sec, idle_sleep_sec)
+        active_sleep_sec = max(active_sleep_sec, 0)
+        heartbeat_ms = max(heartbeat_sec, 1) * 1000
+        tick_warn_ms = max(tick_warn_sec, 1) * 1000
+
+        logger.info(
+            "loop_start",
+            extra={
+                "idle_sleep_sec": idle_sleep_sec,
+                "max_idle_sleep_sec": max_idle_sleep_sec,
+                "active_sleep_sec": active_sleep_sec,
+                "heartbeat_sec": heartbeat_sec,
+                "tick_warn_sec": tick_warn_sec,
+            },
+        )
+
         safety_config = self.settings.raw.get("safety", {})
         reconcile_interval_sec = int(safety_config.get("reconcile_interval_sec", 0))
         next_reconcile_ms = int(time.time() * 1000)
-        while True:
-            now_ms = int(time.time() * 1000)
-            if reconcile_interval_sec > 0 and now_ms >= next_reconcile_ms:
-                self._run_reconcile(
-                    services,
-                    conn,
-                    logger,
-                    metrics,
-                    allow_auto_promote=False,
-                    context="loop",
-                    audit_recorder=audit_recorder,
-                )
-                next_reconcile_ms = now_ms + reconcile_interval_sec * 1000
-            metrics.emit("heartbeat", 1)
-            logger.info("loop_tick")
-            time.sleep(self.loop_interval_sec)
+        last_heartbeat_ms = 0
+        idle_backoff_sec = idle_sleep_sec
+        tick_count = 0
+        stop_requested = False
+
+        def _handle_signal(signum, _frame) -> None:
+            nonlocal stop_requested
+            stop_requested = True
+            logger.info("loop_stop_requested", extra={"signal": signum})
+
+        prev_int = signal.getsignal(signal.SIGINT)
+        prev_term = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGINT, _handle_signal)
+        signal.signal(signal.SIGTERM, _handle_signal)
+
+        try:
+            while True:
+                if stop_requested:
+                    break
+                if max_ticks is not None and tick_count >= max_ticks:
+                    break
+                tick_count += 1
+
+                tick_start_ms = int(time.time() * 1000)
+                set_system_state(conn, "loop_last_tick_started_ms", str(tick_start_ms))
+
+                now_ms = tick_start_ms
+                if reconcile_interval_sec > 0 and now_ms >= next_reconcile_ms:
+                    self._run_reconcile(
+                        services,
+                        conn,
+                        logger,
+                        metrics,
+                        allow_auto_promote=False,
+                        context="loop",
+                        audit_recorder=audit_recorder,
+                    )
+                    next_reconcile_ms = now_ms + reconcile_interval_sec * 1000
+
+                events: List[PositionDeltaEvent] = []
+                if coordinator is not None:
+                    events = coordinator.run_once(conn, mode=self.mode)
+
+                if events:
+                    results = pipeline.process_events(events)
+                    logger.info(
+                        "loop_tick",
+                        extra={
+                            "event_count": len(events),
+                            "result_count": len(results),
+                        },
+                    )
+                    idle_backoff_sec = idle_sleep_sec
+                    if active_sleep_sec > 0:
+                        try:
+                            time.sleep(active_sleep_sec)
+                        except KeyboardInterrupt:
+                            stop_requested = True
+                else:
+                    logger.info(
+                        "loop_idle",
+                        extra={
+                            "sleep_sec": idle_backoff_sec,
+                        },
+                    )
+                    try:
+                        time.sleep(idle_backoff_sec)
+                    except KeyboardInterrupt:
+                        stop_requested = True
+                    idle_backoff_sec = min(max_idle_sleep_sec, idle_backoff_sec * 2)
+
+                tick_end_ms = int(time.time() * 1000)
+                set_system_state(conn, "loop_last_tick_ms", str(tick_end_ms))
+                tick_duration_ms = tick_end_ms - tick_start_ms
+                if tick_duration_ms >= tick_warn_ms:
+                    logger.warning(
+                        "loop_tick_slow",
+                        extra={"duration_ms": tick_duration_ms},
+                    )
+                metrics.emit("loop_tick_duration_ms", tick_duration_ms)
+
+                if tick_end_ms - last_heartbeat_ms >= heartbeat_ms:
+                    metrics.emit("loop_alive", 1)
+                    logger.info("loop_heartbeat", extra={"last_tick_ms": tick_end_ms})
+                    last_heartbeat_ms = tick_end_ms
+        finally:
+            signal.signal(signal.SIGINT, prev_int)
+            signal.signal(signal.SIGTERM, prev_term)
+            logger.info("loop_stop_complete", extra={"ticks": tick_count})

@@ -150,6 +150,15 @@ Checklist:
   - dry-run: no external order placement (adapter disabled); order_results may be written.
   - live: safety_mode != HALT after startup.
   - backfill-only: cursor advances; no external order placement (adapter disabled); order_results may be written.
+- If maintenance_skip_gap is used (including tools/start_live_with_maintenance_skip.sh):
+  - Record the toggle timestamps and config restoration.
+  - Record safety_reason_code and any manual promotion steps.
+  - Attach evidence from tools/ops_validate_run.py.
+  - Example evidence path: docs/evidence/YYYY-MM-DD-ops/ops_maintenance_skip.txt
+- Continuous loop basic health check (when --run-loop is enabled):
+  - Verify DB system_state loop_last_tick_ms advances.
+  - Confirm metrics/log heartbeat entries (loop_alive / loop_heartbeat).
+  - Capture a sample cursor query + heartbeat log snippet in ops evidence.
 - Trigger failure paths and verify expected system_state/log outcomes:
   - SCHEMA_VERSION_MISMATCH
   - EXECUTION_RETRY_BUDGET_EXCEEDED

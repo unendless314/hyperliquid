@@ -36,11 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--loop-interval-sec",
         type=int,
-        default=5,
-        help="Loop interval in seconds for placeholder run loop",
+        default=None,
+        help="Idle sleep interval in seconds for continuous run loop (overrides config)",
     )
     args = parser.parse_args()
-    if args.loop_interval_sec < 1:
+    if args.loop_interval_sec is not None and args.loop_interval_sec < 1:
         raise SystemExit("--loop-interval-sec must be >= 1")
     return args
 

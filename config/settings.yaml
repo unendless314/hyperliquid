@@ -88,3 +88,9 @@ safety:
   reconcile_interval_sec: 60
   snapshot_max_stale_ms: 30000
   startup_policy: "manual"
+orchestrator:
+  loop_idle_sleep_sec: 2
+  loop_max_idle_sleep_sec: 10
+  loop_active_sleep_sec: 0
+  loop_heartbeat_sec: 10
+  loop_tick_warn_sec: 30
