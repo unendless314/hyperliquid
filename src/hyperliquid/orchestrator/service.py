@@ -27,7 +27,7 @@ from hyperliquid.execution.adapters.binance import (
 from hyperliquid.execution.service import ExecutionService, ExecutionServiceConfig
 from hyperliquid.ingest.coordinator import IngestCoordinator
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
-from hyperliquid.safety.reconcile import PositionSnapshot
+from hyperliquid.safety.reconcile import PositionSnapshot, ReconciliationResult
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
 from hyperliquid.storage.positions import load_local_positions_from_orders
@@ -64,8 +64,9 @@ class Orchestrator:
             )
             if get_system_state(conn, "safety_mode") == "HALT":
                 logger.warning("boot_halted")
-                return
-            if self.emit_boot_event:
+                if not self.run_loop:
+                    return
+            if self.emit_boot_event and get_system_state(conn, "safety_mode") != "HALT":
                 self._run_single_cycle(services, conn, logger, audit_recorder=audit_recorder)
             logger.info("boot_complete", extra={"mode": self.mode})
             if self.run_loop:
@@ -184,6 +185,8 @@ class Orchestrator:
             result_provider=persistence.get_order_result,
             safety_state_updater=safety_state_updater,
             audit_recorder=audit_recorder,
+            adapter_success_recorder=lambda: self._record_adapter_success(conn),
+            adapter_error_recorder=lambda: self._record_adapter_error(conn),
         )
         decision_config = DecisionConfig.from_settings(self.settings.raw)
 
@@ -280,17 +283,18 @@ class Orchestrator:
         allow_auto_promote: bool,
         context: str,
         audit_recorder=None,
-    ) -> None:
+    ) -> tuple[ReconciliationResult | None, ReconciliationResult | None]:
         safety: SafetyService = services["safety"]  # type: ignore[assignment]
         execution: ExecutionService = services["execution"]  # type: ignore[assignment]
 
         adapter = execution.adapter
         if adapter is None:
             logger.info("reconcile_skipped", extra={"context": context, "reason": "no_adapter"})
-            return
+            return None, None
 
         try:
             exchange_positions, exchange_ts_ms = adapter.fetch_positions()
+            self._record_adapter_success(conn)
         except AdapterNotImplementedError as exc:
             logger.info(
                 "reconcile_skipped",
@@ -300,12 +304,14 @@ class Orchestrator:
                     "error": str(exc),
                 },
             )
-            return
+            self._record_adapter_error(conn)
+            return None, None
         except Exception as exc:
             logger.warning(
                 "reconcile_failed",
                 extra={"context": context, "error": str(exc)},
             )
+            self._record_adapter_error(conn)
             if context == "startup":
                 set_safety_state(
                     conn,
@@ -319,7 +325,7 @@ class Orchestrator:
                 1,
                 tags={"context": context},
             )
-            return
+            return None, None
 
         now_ms = int(time.time() * 1000)
         local_positions = load_local_positions_from_orders(conn)
@@ -340,6 +346,15 @@ class Orchestrator:
         snapshot_max_stale_ms = int(safety_config.get("snapshot_max_stale_ms", 0))
         current_state = load_safety_state(conn)
 
+        raw_result = safety.reconcile_snapshots(
+            local_snapshot=local_snapshot,
+            exchange_snapshot=exchange_snapshot,
+            warn_threshold=warn_threshold,
+            critical_threshold=critical_threshold,
+            snapshot_max_stale_ms=snapshot_max_stale_ms,
+            current_state=None,
+            allow_auto_promote=allow_auto_promote,
+        )
         result = safety.reconcile_snapshots(
             local_snapshot=local_snapshot,
             exchange_snapshot=exchange_snapshot,
@@ -370,6 +385,15 @@ class Orchestrator:
             result.report.max_drift,
             tags={"context": context, "mode": result.mode, "reason": result.reason_code},
         )
+        return result, raw_result
+
+    @staticmethod
+    def _record_adapter_success(conn) -> None:
+        set_system_state(conn, "adapter_last_success_ms", str(int(time.time() * 1000)))
+
+    @staticmethod
+    def _record_adapter_error(conn) -> None:
+        set_system_state(conn, "adapter_last_error_ms", str(int(time.time() * 1000)))
 
     def _run_single_cycle(
         self, services: dict[str, object], conn, logger, *, audit_recorder=None
@@ -467,6 +491,13 @@ class Orchestrator:
         idle_backoff_sec = idle_sleep_sec
         tick_count = 0
         stop_requested = False
+        halt_noncritical_required = 3
+        halt_recovery_window_ms = 60_000
+        halt_allowlist = {
+            "SNAPSHOT_STALE",
+            "BACKFILL_WINDOW_EXCEEDED",
+            "RECONCILE_CRITICAL",
+        }
 
         def _handle_signal(signum, _frame) -> None:
             nonlocal stop_requested
@@ -490,8 +521,9 @@ class Orchestrator:
                 set_system_state(conn, "loop_last_tick_started_ms", str(tick_start_ms))
 
                 now_ms = tick_start_ms
+                raw_reconcile = None
                 if reconcile_interval_sec > 0 and now_ms >= next_reconcile_ms:
-                    self._run_reconcile(
+                    _, raw_reconcile = self._run_reconcile(
                         services,
                         conn,
                         logger,
@@ -502,11 +534,81 @@ class Orchestrator:
                     )
                     next_reconcile_ms = now_ms + reconcile_interval_sec * 1000
 
+                metrics.emit("heartbeat", 1)
+
+                safety_state = load_safety_state(conn)
+                safety_mode = safety_state.mode if safety_state is not None else "ARMED_SAFE"
+                safety_reason = safety_state.reason_code if safety_state is not None else ""
+
+                if safety_mode == "HALT":
+                    noncritical_count = int(
+                        get_system_state(conn, "halt_recovery_noncritical_count") or 0
+                    )
+                    if raw_reconcile is None:
+                        noncritical_count = 0
+                    elif raw_reconcile.reason_code in ("OK", "RECONCILE_WARN"):
+                        noncritical_count += 1
+                    else:
+                        noncritical_count = 0
+                    set_system_state(
+                        conn,
+                        "halt_recovery_noncritical_count",
+                        str(noncritical_count),
+                    )
+
+                    if self._should_auto_recover_halt(
+                        conn,
+                        now_ms=now_ms,
+                        safety_reason=safety_reason,
+                        raw_reconcile=raw_reconcile,
+                        noncritical_count=noncritical_count,
+                        allowlist=halt_allowlist,
+                        window_ms=halt_recovery_window_ms,
+                        required_noncritical=halt_noncritical_required,
+                    ):
+                        logger.warning(
+                            "halt_auto_recovery",
+                            extra={
+                                "reason_code": safety_reason,
+                                "noncritical_count": noncritical_count,
+                            },
+                        )
+                        metrics.emit(
+                            "halt_auto_recovery",
+                            1,
+                            tags={"reason_code": safety_reason},
+                        )
+                        set_safety_state(
+                            conn,
+                            mode="ARMED_SAFE",
+                            reason_code="HALT_RECOVERY_AUTO",
+                            reason_message="Auto-recovered to reduce-only after HALT",
+                            audit_recorder=audit_recorder,
+                        )
+                        set_system_state(conn, "halt_recovery_noncritical_count", "0")
+                        safety_mode = "HALT"
+                else:
+                    set_system_state(conn, "halt_recovery_noncritical_count", "0")
+
                 events: List[PositionDeltaEvent] = []
-                if coordinator is not None:
+                if coordinator is not None and safety_mode != "HALT":
                     events = coordinator.run_once(conn, mode=self.mode)
 
-                if events:
+                if safety_mode == "HALT":
+                    logger.info(
+                        "loop_tick",
+                        extra={
+                            "event_count": len(events),
+                            "result_count": 0,
+                            "safety_mode": safety_mode,
+                        },
+                    )
+                    try:
+                        time.sleep(idle_backoff_sec)
+                    except KeyboardInterrupt:
+                        stop_requested = True
+                    idle_backoff_sec = min(max_idle_sleep_sec, idle_backoff_sec * 2)
+                elif events:
                     results = pipeline.process_events(events)
                     logger.info(
                         "loop_tick",
@@ -552,3 +654,37 @@ class Orchestrator:
             signal.signal(signal.SIGINT, prev_int)
             signal.signal(signal.SIGTERM, prev_term)
             logger.info("loop_stop_complete", extra={"ticks": tick_count})
+
+    def _should_auto_recover_halt(
+        self,
+        conn,
+        *,
+        now_ms: int,
+        safety_reason: str,
+        raw_reconcile: ReconciliationResult | None,
+        noncritical_count: int,
+        allowlist: set[str],
+        window_ms: int,
+        required_noncritical: int,
+    ) -> bool:
+        if safety_reason not in allowlist:
+            return False
+        if raw_reconcile is None:
+            return False
+        if raw_reconcile.reason_code == "SNAPSHOT_STALE":
+            return False
+        last_success_ms = int(get_system_state(conn, "adapter_last_success_ms") or 0)
+        last_error_ms = int(get_system_state(conn, "adapter_last_error_ms") or 0)
+        if now_ms - last_success_ms > window_ms:
+            return False
+        if last_error_ms and now_ms - last_error_ms <= window_ms:
+            return False
+        if safety_reason == "RECONCILE_CRITICAL":
+            return noncritical_count >= required_noncritical
+        if safety_reason == "BACKFILL_WINDOW_EXCEEDED":
+            ingest_cfg = self.settings.raw.get("ingest", {})
+            if not ingest_cfg.get("maintenance_skip_gap", False):
+                return False
+            maintenance_applied = get_system_state(conn, "maintenance_skip_applied_ms")
+            return maintenance_applied is not None
+        return True

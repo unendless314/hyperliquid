@@ -38,7 +38,7 @@
 - If either side is missing a symbol present on the other side, enter HALT with reason_code=RECONCILE_CRITICAL.
 
 ## Runtime Safety Modes (Continuous Operation)
-- HALT: keep the process running for monitoring/reconcile/ingest, but block all trading.
+- HALT: keep the process running for monitoring/reconcile/heartbeat, pause ingest, and block all trading.
 - ARMED_SAFE: allow reduce-only intents; block exposure increases.
 - ARMED_LIVE: normal trading behavior.
 
@@ -75,6 +75,9 @@ Auto-recovery is NOT allowed for:
 - CONTRACT_VERSION_MISMATCH
 - STORAGE_UNAVAILABLE
 - CONFIG_HASH_MISMATCH / CONFIG_HASH_CHANGED
+
+Note:
+- While in HALT, ingest is paused. For BACKFILL_WINDOW_EXCEEDED recovery, the operator must explicitly apply maintenance skip so maintenance_skip_applied_ms is recorded; otherwise auto-recovery will not trigger.
 
 When auto-recovery triggers:
 - Record the transition with reason_code=HALT_RECOVERY_AUTO (or equivalent) and evidence.

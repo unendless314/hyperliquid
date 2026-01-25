@@ -164,10 +164,11 @@ Checklist:
 Checklist:
 - Identify reason code (e.g., BACKFILL_WINDOW_EXCEEDED, STORAGE_UNAVAILABLE, EXECUTION_ADAPTER_NOT_IMPLEMENTED)
 - Stop trading immediately (HALT blocks order placement).
-- If continuous mode is enabled, keep the process running for monitoring/reconcile/ingest unless isolation is required.
+- If continuous mode is enabled, keep the process running for monitoring/reconcile/heartbeat; ingest is paused unless isolation is required.
 - Fix root cause (storage, config mismatch, position mode).
 - Auto-recovery to ARMED_SAFE (reduce-only) is allowed only when HALT recovery conditions are satisfied (see docs/modules/SAFETY.md).
 - Auto-recovery applies only to allowlist reason_code values (see docs/modules/SAFETY.md).
+- When HALT is due to BACKFILL_WINDOW_EXCEEDED, auto-recovery requires the operator to apply maintenance skip so maintenance_skip_applied_ms is recorded; otherwise the system will remain in HALT.
 - After verification, explicitly promote to ARMED_LIVE per RUNBOOK approval steps.
 
 ### 3) Execution Retry Budget Exceeded

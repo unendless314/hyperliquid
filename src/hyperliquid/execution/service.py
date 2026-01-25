@@ -18,6 +18,7 @@ PostExecutionHook = Callable[[OrderIntent, OrderResult], None]
 ResultProvider = Callable[[str], Optional[OrderResult]]
 SafetyStateUpdater = Callable[[str, str, str], None]
 AuditRecorder = Callable[[AuditLogEntry], None]
+AdapterEventRecorder = Callable[[], None]
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,8 @@ class ExecutionService:
     result_provider: Optional[ResultProvider] = None
     safety_state_updater: Optional[SafetyStateUpdater] = None
     audit_recorder: Optional[AuditRecorder] = None
+    adapter_success_recorder: Optional[AdapterEventRecorder] = None
+    adapter_error_recorder: Optional[AdapterEventRecorder] = None
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         assert_contract_version(intent.contract_version)
@@ -129,7 +132,9 @@ class ExecutionService:
             time.sleep(min(poll_interval, remaining))
             try:
                 current = adapter.query_order(intent)
+                self._record_adapter_success()
             except Exception as exc:
+                self._record_adapter_error()
                 return OrderResult(
                     correlation_id=intent.correlation_id,
                     exchange_order_id=result.exchange_order_id,
@@ -143,7 +148,9 @@ class ExecutionService:
                 return current
         try:
             cancel_result = adapter.cancel_order(intent)
+            self._record_adapter_success()
         except Exception as exc:
+            self._record_adapter_error()
             return OrderResult(
                 correlation_id=intent.correlation_id,
                 exchange_order_id=result.exchange_order_id,
@@ -156,8 +163,11 @@ class ExecutionService:
         if _is_terminal_status(cancel_result.status):
             return cancel_result
         try:
-            return adapter.query_order(intent)
+            current = adapter.query_order(intent)
+            self._record_adapter_success()
+            return current
         except Exception as exc:
+            self._record_adapter_error()
             return OrderResult(
                 correlation_id=intent.correlation_id,
                 exchange_order_id=result.exchange_order_id,
@@ -189,7 +199,9 @@ class ExecutionService:
             return result
         try:
             mark_price = adapter.fetch_mark_price(intent.symbol)
+            self._record_adapter_success()
         except Exception as exc:
+            self._record_adapter_error()
             return OrderResult(
                 correlation_id=intent.correlation_id,
                 exchange_order_id=result.exchange_order_id,
@@ -252,10 +264,13 @@ class ExecutionService:
     def _execute_adapter(self, intent: OrderIntent) -> OrderResult:
         if self.adapter is not None:
             try:
-                return self.adapter.execute(intent)
+                result = self.adapter.execute(intent)
+                self._record_adapter_success()
+                return result
             except AdapterNotImplementedError:
                 raise
             except Exception as exc:
+                self._record_adapter_error()
                 return OrderResult(
                     correlation_id=intent.correlation_id,
                     exchange_order_id=None,
@@ -315,7 +330,9 @@ class ExecutionService:
             attempts += 1
             try:
                 current = adapter.query_order(intent)
+                self._record_adapter_success()
             except Exception as exc:
+                self._record_adapter_error()
                 last_error = str(exc)
             else:
                 if _is_terminal_status(current.status, include_unknown=False):
@@ -342,6 +359,22 @@ class ExecutionService:
             error_code="RETRY_BUDGET_EXCEEDED",
             error_message=last_error,
         )
+
+    def _record_adapter_success(self) -> None:
+        if self.adapter_success_recorder is None:
+            return
+        try:
+            self.adapter_success_recorder()
+        except Exception:
+            return
+
+    def _record_adapter_error(self) -> None:
+        if self.adapter_error_recorder is None:
+            return
+        try:
+            self.adapter_error_recorder()
+        except Exception:
+            return
 
     def _record_transition(
         self, intent: OrderIntent, from_state: str, result: OrderResult

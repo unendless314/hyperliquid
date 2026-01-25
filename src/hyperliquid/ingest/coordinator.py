@@ -12,7 +12,7 @@ from hyperliquid.ingest.adapters.hyperliquid import (
     HyperliquidIngestConfig,
 )
 from hyperliquid.ingest.service import IngestService, RawPositionEvent
-from hyperliquid.storage.db import get_system_state, update_cursor
+from hyperliquid.storage.db import get_system_state, set_system_state, update_cursor
 from hyperliquid.storage.persistence import AuditLogEntry, DbPersistence
 from hyperliquid.storage.safety import set_safety_state
 
@@ -143,6 +143,7 @@ class IngestCoordinator:
             symbol="MAINTENANCE",
             commit=False,
         )
+        set_system_state(conn, "maintenance_skip_applied_ms", str(now_ms), commit=False)
         set_safety_state(
             conn,
             mode="ARMED_SAFE",
