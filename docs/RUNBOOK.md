@@ -182,7 +182,9 @@ Maintenance restart:
   - Target wallet position matches expected state.
   - No unexpected pending intents exist.
   - Recent fills align with the intended restart window.
-- Manually promote to ARMED_LIVE after verifying positions.
+- Manually promote to ARMED_LIVE after verifying positions and open orders.
+  - If you need to force promotion from ARMED_SAFE (not HALT), use:
+    - PYTHONPATH=src python3 tools/ops_reset_safety.py --config config/settings.yaml --schema config/schema.json --mode ARMED_LIVE --reason-code MANUAL_PROMOTE --reason-message "Promote to ARMED_LIVE after verification" --allow-non-halt
 - Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
 
 ## Long Downtime Recovery (Gap Exceeded)

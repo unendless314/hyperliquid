@@ -136,12 +136,28 @@ see the technical docs referenced in docs/README.md.
   - [x] Task: After DB schema v3 rebuild, run smoke check (startup + audit_log write) and attach evidence (2026-01-24)
   - Acceptance: Manual ops checklist is executable.
 
+## Epic 7: Production hardening (continuous operation)
+- [ ] Story 7.1: Ingest-driven continuous run loop
+  - [ ] Task: Replace placeholder --run-loop with ingest-driven scheduling
+  - [ ] Task: Define shutdown/restart semantics for continuous mode
+  - Acceptance: Live mode can run continuously without manual re-invocation.
+
+- [ ] Story 7.2: Automated recovery for safety gates
+  - [ ] Task: Provide controlled recovery workflow for BACKFILL_WINDOW_EXCEEDED (maintenance skip + evidence)
+  - [ ] Task: Provide controlled recovery workflow for SNAPSHOT_STALE (reconcile + verification)
+  - Acceptance: Common safety HALT/SAFE states can be recovered without manual DB edits.
+
+- [ ] Story 7.3: Replay policy expansion (optional)
+  - [ ] Task: Define supported replay_policy values beyond close_only (if opening positions on replay is required)
+  - [ ] Task: Update decision validation + tests for new policies
+  - Acceptance: Replay policy is explicit, tested, and documented.
+
 ## Handoff Checklist
 - Confirm config schema validates: tools/validate_config.py
 - Recreate DB after schema changes (audit_log uses schema v3)
 - Run key unit tests: decision_slippage, filters, audit_log
 - Verify decision config defaults (replay_policy, slippage_cap_pct, price_failure_policy)
-  - Review RUNBOOK checklist before any live enablement
+- Review RUNBOOK checklist before any live enablement
 
 ## Handoff Notes (2026/01/24)
   Historical handoff notes live in git history.
@@ -162,3 +178,18 @@ see the technical docs referenced in docs/README.md.
   - Ensure RUNBOOK Go/No-Go checklist is complete (monitoring/alerting/rollback).
   - Verify DB v3 rebuilt + smoke check passed.
   - Validate safety reconcile with real execution adapter.
+
+  ### Handoff Summary (for next engineer)
+
+  - Production config split:
+    - config/settings.prod.yaml holds mainnet settings + hash.
+    - config/settings.yaml reverted to testnet/local.
+  - Evidence archived:
+    - docs/evidence/2026-01-24-prod-live/ (production live minimal validation)
+    - docs/evidence/2026-01-24-ops/ (A1–A3, Go/No-Go, Epic 4/5, testnet evidence)
+    - docs/ops_validation_run.txt references the archived paths.
+  - Epic status: Epic 3/4/5 and Story 6.2 completed with evidence.
+  - Decision constraints:
+    - replay_policy remains close_only (replay events cannot increase positions).
+    - safety starts in ARMED_SAFE; manual promotion to ARMED_LIVE is required for adding risk.
+  - Next work: Epic 7 (continuous run loop + automated safety recovery + replay policy expansion if needed).
