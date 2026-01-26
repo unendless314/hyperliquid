@@ -49,7 +49,7 @@
 
 ## HALT Auto-Recovery to ARMED_SAFE (Reduce-Only)
 Auto-recovery is permitted only when all of the following conditions are satisfied:
-- Reconcile results are non-critical for N consecutive runs (default N=3 until configurable).
+- Reconcile results are non-critical for N consecutive runs (default N=3; configurable via safety.halt_recovery_noncritical_required).
 - Snapshot is not stale (snapshot_max_stale_ms satisfied).
 - Backfill window gap is not exceeded (or maintenance skip is explicitly applied with evidence).
 - Execution adapter is healthy and responding (see definition below).
@@ -68,6 +68,9 @@ Auto-recovery to ARMED_SAFE is only allowed for these reason codes:
 - SNAPSHOT_STALE
 - BACKFILL_WINDOW_EXCEEDED (only when maintenance skip has been explicitly applied with evidence)
 - RECONCILE_CRITICAL (only after N consecutive non-critical reconciliations)
+
+Window/threshold defaults:
+- success/error window default: 60 seconds (configurable via safety.halt_recovery_window_sec)
 
 Auto-recovery is NOT allowed for:
 - EXECUTION_ADAPTER_NOT_IMPLEMENTED
@@ -102,3 +105,5 @@ When auto-recovery triggers:
 - CONTRACT_VERSION_MISMATCH: contract version differs from recorded value
 - SCHEMA_VERSION_MISMATCH: DB schema version differs from expected value
 - EXECUTION_ADAPTER_NOT_IMPLEMENTED: execution adapter not wired in live mode
+- MANUAL_UNHALT: operator moved HALT -> ARMED_SAFE
+- MANUAL_PROMOTE: operator moved ARMED_SAFE -> ARMED_LIVE

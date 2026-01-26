@@ -491,8 +491,12 @@ class Orchestrator:
         idle_backoff_sec = idle_sleep_sec
         tick_count = 0
         stop_requested = False
-        halt_noncritical_required = 3
-        halt_recovery_window_ms = 60_000
+        halt_noncritical_required = int(
+            safety_config.get("halt_recovery_noncritical_required", 3)
+        )
+        halt_recovery_window_ms = (
+            int(safety_config.get("halt_recovery_window_sec", 60)) * 1000
+        )
         halt_allowlist = {
             "SNAPSHOT_STALE",
             "BACKFILL_WINDOW_EXCEEDED",
@@ -541,6 +545,17 @@ class Orchestrator:
                 safety_reason = safety_state.reason_code if safety_state is not None else ""
 
                 if safety_mode == "HALT":
+                    if (
+                        safety_reason == "BACKFILL_WINDOW_EXCEEDED"
+                        and coordinator is not None
+                        and coordinator.apply_maintenance_skip(conn)
+                    ):
+                        logger.warning("maintenance_skip_applied")
+                        metrics.emit("maintenance_skip_applied", 1)
+                        safety_state = load_safety_state(conn)
+                        safety_mode = (
+                            safety_state.mode if safety_state is not None else "HALT"
+                        )
                     noncritical_count = int(
                         get_system_state(conn, "halt_recovery_noncritical_count") or 0
                     )

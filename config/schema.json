@@ -406,6 +406,14 @@
           "type": "integer",
           "minimum": 0
         },
+        "halt_recovery_noncritical_required": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "halt_recovery_window_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
         "startup_policy": {
           "type": "string"
         }

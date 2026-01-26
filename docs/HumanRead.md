@@ -29,11 +29,10 @@ tail -n 50 logs/metrics.log
 
 強制升級指令（從 ARMED_SAFE 進 ARMED_LIVE）：
 ```bash
-PYTHONPATH=src python3 tools/ops_reset_safety.py \
+PYTHONPATH=src python3 tools/ops_recovery.py \
   --config config/settings.prod.yaml \
   --schema config/schema.json \
-  --mode ARMED_LIVE \
-  --reason-code MANUAL_PROMOTE \
+  --action promote \
   --reason-message "Promote to ARMED_LIVE after verification" \
   --allow-non-halt
 
@@ -105,18 +104,36 @@ ingest:
   maintenance_skip_gap: true
 ```
 
-2) 用 dry-run 啟動一次（讓 cursor 跳到現在）
+2) 套用 maintenance skip（會更新 cursor，但不改 safety_mode）
+```bash
+PYTHONPATH=src python3 tools/ops_recovery.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --action maintenance-skip \
+  --reason-message "Maintenance skip applied"
+```
+
+3) 用 dry-run 啟動一次（驗證狀態）
 ```bash
 PYTHONPATH=src python3 src/hyperliquid/main.py --mode dry-run --config config/settings.prod.yaml
 ```
 
-3) 把 `ingest.maintenance_skip_gap` 改回 `false`
+4) 把 `ingest.maintenance_skip_gap` 改回 `false`
 ```yaml
 ingest:
   maintenance_skip_gap: false
 ```
 
-4) 再用 live 模式啟動
+5) 人工 unhalt 再進入 live 模式
+```bash
+PYTHONPATH=src python3 tools/ops_recovery.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --action unhalt \
+  --reason-message "Manual unhalt after verification"
+```
+
+6) 再用 live 模式啟動
 ```bash
 PYTHONPATH=src python3 src/hyperliquid/main.py --mode live --config config/settings.prod.yaml
 ```

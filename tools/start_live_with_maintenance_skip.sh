@@ -77,13 +77,12 @@ safety_mode="$(sqlite3 "$db_path" "select value from system_state where key='saf
 reason_code="$(sqlite3 "$db_path" "select value from system_state where key='safety_reason_code';")"
 
 if [[ "$safety_mode" == "HALT" && "$reason_code" == "BACKFILL_WINDOW_EXCEEDED" ]]; then
-  echo "safety_mode=HALT reason=BACKFILL_WINDOW_EXCEEDED -> resetting to ARMED_SAFE (maintenance skip)"
-  PYTHONPATH=src python3 tools/ops_reset_safety.py \
+  echo "safety_mode=HALT reason=BACKFILL_WINDOW_EXCEEDED -> applying maintenance skip (no safety change)"
+  PYTHONPATH=src python3 tools/ops_recovery.py \
     --config "$CONFIG_PATH" \
     --schema "$SCHEMA_PATH" \
-    --mode ARMED_SAFE \
-    --reason-code MAINTENANCE_SKIP \
-    --reason-message "Maintenance skip reset"
+    --action maintenance-skip \
+    --reason-message "Maintenance skip applied"
 fi
 
 echo "maintenance_skip_gap=true (temporary) -> starting live mode"
@@ -92,11 +91,10 @@ PYTHONPATH=src python3 src/hyperliquid/main.py --mode live --config "$CONFIG_PAT
 safety_mode="$(sqlite3 "$db_path" "select value from system_state where key='safety_mode';")"
 if [[ "$safety_mode" == "ARMED_SAFE" ]]; then
   echo "post-boot safety_mode=ARMED_SAFE -> promoting to ARMED_LIVE (operator override)"
-  PYTHONPATH=src python3 tools/ops_reset_safety.py \
+  PYTHONPATH=src python3 tools/ops_recovery.py \
     --config "$CONFIG_PATH" \
     --schema "$SCHEMA_PATH" \
-    --mode ARMED_LIVE \
-    --reason-code MANUAL_PROMOTE \
+    --action promote \
     --reason-message "Promote to ARMED_LIVE after verification" \
     --allow-non-halt
 fi

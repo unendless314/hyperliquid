@@ -90,6 +90,14 @@ For each failure path, capture:
 - Observed audit_log row(s):
 - Observed metrics/logs:
 
+## Auto-Recovery Evidence (HALT -> ARMED_SAFE)
+Capture when testing auto-recovery in continuous mode:
+- Triggered HALT reason_code (allowlist only):
+- halt_recovery_noncritical_required / halt_recovery_window_sec values:
+- safety_mode transition evidence (HALT -> ARMED_SAFE):
+- safety_reason_code=HALT_RECOVERY_AUTO:
+- metrics/log snippet (halt_auto_recovery / loop_heartbeat):
+
 ## Go/No-Go Rehearsal Evidence
 Record the checklist evidence here using the same format (no separate template).
 Suggested fields:
@@ -102,7 +110,7 @@ Suggested fields:
   - cursor update evidence (last_processed_timestamp_ms before/after)
   - safety_reason_code confirming maintenance skip
   - metrics_tail timestamp reflects current run
-  - safety reset tool output captured (tools/ops_reset_safety.py)
+  - recovery tool output captured (tools/ops_recovery.py)
 Note: Production live evidence should follow docs/RUNBOOK.md (Production Live Minimal Validation).
 
 ### SCHEMA_VERSION_MISMATCH

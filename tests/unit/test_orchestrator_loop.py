@@ -130,7 +130,7 @@ def test_halt_auto_recovery_backfill_window(db_conn, db_path, tmp_path, monkeypa
     settings = _build_settings(
         db_path,
         tmp_path,
-        ingest_enabled=False,
+        ingest_enabled=True,
         safety_overrides={
             "reconcile_interval_sec": 1,
             "warn_threshold": 0.1,
@@ -150,10 +150,6 @@ def test_halt_auto_recovery_backfill_window(db_conn, db_path, tmp_path, monkeypa
         reason_code="BACKFILL_WINDOW_EXCEEDED",
         reason_message="test",
     )
-    from hyperliquid.storage.db import set_system_state
-
-    set_system_state(db_conn, "maintenance_skip_applied_ms", "1000")
-
     clock = {"t": 1000.0}
 
     def _fake_time() -> float:

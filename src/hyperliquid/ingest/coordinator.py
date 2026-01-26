@@ -67,6 +67,7 @@ class IngestCoordinator:
             if self.runtime.maintenance_skip_gap and reason_code == "BACKFILL_WINDOW_EXCEEDED":
                 now_ms = int(time.time() * 1000)
                 self._apply_maintenance_skip(conn, now_ms=now_ms)
+                return []
             else:
                 return []
         if mode == "backfill-only":
@@ -78,6 +79,21 @@ class IngestCoordinator:
         for event in events:
             assert_contract_version(event.contract_version)
         return events
+
+    def apply_maintenance_skip(self, conn) -> bool:
+        safety_mode = get_system_state(conn, "safety_mode") or "ARMED_SAFE"
+        reason_code = get_system_state(conn, "safety_reason_code") or ""
+        if safety_mode != "HALT":
+            return False
+        if reason_code != "BACKFILL_WINDOW_EXCEEDED":
+            return False
+        if not self.runtime.maintenance_skip_gap:
+            return False
+        if get_system_state(conn, "maintenance_skip_applied_ms") is not None:
+            return False
+        now_ms = int(time.time() * 1000)
+        self._apply_maintenance_skip(conn, now_ms=now_ms)
+        return True
 
     def _run_backfill(self, conn) -> tuple[List[PositionDeltaEvent], bool]:
         last_ts = int(get_system_state(conn, "last_processed_timestamp_ms") or 0)
@@ -144,13 +160,7 @@ class IngestCoordinator:
             commit=False,
         )
         set_system_state(conn, "maintenance_skip_applied_ms", str(now_ms), commit=False)
-        set_safety_state(
-            conn,
-            mode="ARMED_SAFE",
-            reason_code="MAINTENANCE_SKIP_GAP",
-            reason_message="Maintenance restart skipped gap enforcement",
-            audit_recorder=self._audit_recorder(conn),
-        )
+        conn.commit()
 
     def _audit_recorder(self, conn):
         if self.audit_recorder is not None:

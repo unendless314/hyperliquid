@@ -181,15 +181,35 @@ Checklist:
 
 Maintenance restart:
 - Use an explicit maintenance flag (config: ingest.maintenance_skip_gap=true) to skip gap enforcement on restart.
-- When enabled, cursor is set to now, safety_reason_code records the bypass, and the system starts in ARMED_SAFE.
+- When enabled and applied, cursor is set to now and maintenance_skip_applied_ms is recorded; safety_mode remains HALT until auto-recovery or manual unhalt.
 - Before promotion, manually verify:
   - Target wallet position matches expected state.
   - No unexpected pending intents exist.
   - Recent fills align with the intended restart window.
 - Manually promote to ARMED_LIVE after verifying positions and open orders.
   - If you need to force promotion from ARMED_SAFE (not HALT), use:
-    - PYTHONPATH=src python3 tools/ops_reset_safety.py --config config/settings.yaml --schema config/schema.json --mode ARMED_LIVE --reason-code MANUAL_PROMOTE --reason-message "Promote to ARMED_LIVE after verification" --allow-non-halt
+    - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action promote --reason-message "Promote to ARMED_LIVE after verification" --allow-non-halt
 - Note: maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED).
+
+### Ops Recovery Tool (Recommended)
+Use tools/ops_recovery.py for maintenance skip, unhalt, and promote actions.
+
+Actions:
+- maintenance-skip: update cursor + maintenance_skip_applied_ms only (does not change safety_mode).
+- unhalt: set safety_mode=ARMED_SAFE (reduce-only).
+- promote: set safety_mode=ARMED_LIVE.
+
+Standard flow:
+1) maintenance-skip (if BACKFILL_WINDOW_EXCEEDED)
+2) verify positions + state
+3) unhalt (reduce-only)
+4) observe
+5) promote (full trading)
+
+Notes:
+- maintenance-skip does not bypass auto-recovery checks; it only records evidence for recovery.
+- maintenance-skip requires ingest.maintenance_skip_gap=true in config.
+- unhalt/promote are explicit operator actions and should be recorded in ops evidence.
 
 ### Maintenance Skip Helper Script (Temporary)
 `tools/start_live_with_maintenance_skip.sh` is a convenience helper added post‑MVP to speed up gap recovery.
@@ -217,21 +237,21 @@ Use this flow when the system has been offline long enough to exceed backfill_wi
 Goal: recover safely with auditable evidence and avoid silent cursor jumps.
 
 Steps:
-1. If safety_mode is HALT with BACKFILL_WINDOW_EXCEEDED, clear the HALT state first:
-   - Preferred: rebuild DB if required by schema version (see docs/DATA_MODEL.md) or if cursor is stale beyond recovery.
-   - Alternate: reset safety state with an auditable tool before proceeding:
-     - PYTHONPATH=src python3 tools/ops_reset_safety.py --config config/settings.yaml --schema config/schema.json --mode ARMED_SAFE --reason-code MAINTENANCE_SKIP --reason-message "Maintenance skip reset"
-     - Save tool output in docs/ops_validation_run.txt (or append to ops evidence).
-2. Set `ingest.maintenance_skip_gap=true` in config/settings.yaml for a single controlled restart.
+1. Set `ingest.maintenance_skip_gap=true` in config/settings.yaml for a single controlled restart.
+2. Apply maintenance skip with ops_recovery (records maintenance_skip_applied_ms):
+   - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action maintenance-skip --reason-message "Maintenance skip applied"
 3. Start in dry-run mode to validate state without execution:
    - PYTHONPATH=src python3 src/hyperliquid/main.py --mode dry-run --config config/settings.yaml
 4. Capture evidence:
    - PYTHONPATH=src python3 tools/ops_validate_run.py --config config/settings.yaml --schema config/schema.json --exchange-time --metrics-tail 5 --output docs/ops_validation_run.txt
 5. Verify and record:
-   - safety_mode=ARMED_SAFE and safety_reason_code indicates maintenance skip
+   - safety_mode remains HALT until auto-recovery or manual unhalt
    - last_processed_timestamp_ms updated to a recent value
    - metrics_tail shows current timestamps
-6. Revert `ingest.maintenance_skip_gap=false` and restart in the target mode.
+6. After verification, unhalt (reduce-only) then promote if needed:
+   - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action unhalt --reason-message "Manual unhalt after verification"
+   - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action promote --reason-message "Manual promote after verification" --allow-non-halt
+7. Revert `ingest.maintenance_skip_gap=false` and restart in the target mode if required.
 
 Evidence:
 - Record the maintenance skip toggle, cursor update, and any manual checks in docs/OPS_VALIDATION.md (Go/No-Go evidence section).

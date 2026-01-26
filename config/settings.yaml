@@ -87,6 +87,8 @@ safety:
   critical_threshold: 0.01
   reconcile_interval_sec: 60
   snapshot_max_stale_ms: 30000
+  halt_recovery_noncritical_required: 3
+  halt_recovery_window_sec: 60
   startup_policy: "manual"
 orchestrator:
   loop_idle_sleep_sec: 2
