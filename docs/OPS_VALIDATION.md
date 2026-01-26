@@ -98,6 +98,18 @@ Capture when testing auto-recovery in continuous mode:
 - safety_reason_code=HALT_RECOVERY_AUTO:
 - metrics/log snippet (halt_auto_recovery / loop_heartbeat):
 
+### Auto-Recovery Run (2026-01-26)
+- Triggered HALT reason_code: BACKFILL_WINDOW_EXCEEDED
+- halt_recovery_noncritical_required / halt_recovery_window_sec: 3 / 60
+- safety_mode transition evidence:
+  - before: safety_mode=HALT, safety_reason_code=BACKFILL_WINDOW_EXCEEDED
+  - after: safety_mode=ARMED_SAFE
+- safety_reason_code=HALT_RECOVERY_AUTO
+- Evidence:
+  - maintenance_skip_applied_ms=1769402087167
+  - adapter_last_success_ms=1769402121583
+  - metrics: halt_auto_recovery emitted at 2026-01-26T04:35:21Z
+
 ## Go/No-Go Rehearsal Evidence
 Record the checklist evidence here using the same format (no separate template).
 Suggested fields:

@@ -137,14 +137,18 @@ see the technical docs referenced in docs/README.md.
   - Acceptance: Manual ops checklist is executable.
 
 ## Epic 7: Production hardening (continuous operation)
-- [ ] Story 7.1: Ingest-driven continuous run loop
-  - [ ] Task: Replace placeholder --run-loop with ingest-driven scheduling
-  - [ ] Task: Define shutdown/restart semantics for continuous mode
+- [x] Story 7.1: Ingest-driven continuous run loop
+  - [x] Task: Replace placeholder --run-loop with ingest-driven scheduling
+  - [x] Task: Define shutdown/restart semantics for continuous mode
+  - [x] Task: Add loop heartbeat + idle backoff + tick timing metrics
+  - [x] Task: Pause ingest during HALT and gate trading by safety mode
   - Acceptance: Live mode can run continuously without manual re-invocation.
 
-- [ ] Story 7.2: Automated recovery for safety gates
-  - [ ] Task: Provide controlled recovery workflow for BACKFILL_WINDOW_EXCEEDED (maintenance skip + evidence)
-  - [ ] Task: Provide controlled recovery workflow for SNAPSHOT_STALE (reconcile + verification)
+- [x] Story 7.2: Automated recovery for safety gates
+  - [x] Task: Provide controlled recovery workflow for BACKFILL_WINDOW_EXCEEDED (maintenance skip + evidence)
+  - [x] Task: Provide controlled recovery workflow for SNAPSHOT_STALE (reconcile + verification)
+  - [x] Task: Add ops_recovery tool (maintenance-skip / unhalt / promote) with audit trail
+  - [x] Task: Validate auto-recovery evidence in ops checklist (docs/OPS_VALIDATION.md)
   - Acceptance: Common safety HALT/SAFE states can be recovered without manual DB edits.
 
 - [ ] Story 7.3: Replay policy expansion (optional)
@@ -161,6 +165,14 @@ see the technical docs referenced in docs/README.md.
 
 ## Handoff Notes (2026/01/24)
   Historical handoff notes live in git history.
+
+  ### Handoff Notes (2026/01/26)
+
+  - Epic 7.1 + 7.2 completed with evidence.
+  - Ops recovery unified under tools/ops_recovery.py (maintenance-skip/unhalt/promote).
+  - HALT behavior: loop continues, ingest paused, trading gated by safety mode.
+  - Auto-recovery validated for BACKFILL_WINDOW_EXCEEDED (see docs/OPS_VALIDATION.md, 2026-01-26 entry).
+  - Pending: add SNAPSHOT_STALE auto-recovery evidence (not yet recorded).
 
   ### Story 6.2 Ops Validation Complete
 

@@ -158,6 +158,7 @@ Checklist:
 - Auto-recovery validation (HALT -> ARMED_SAFE):
   - Trigger a HALT reason in the allowlist (e.g., RECONCILE_CRITICAL) and confirm auto-recovery to ARMED_SAFE after N non-critical reconciles.
   - Capture evidence: safety_mode transition, safety_reason_code=HALT_RECOVERY_AUTO, and metrics/log heartbeat entries.
+  - Pending: add SNAPSHOT_STALE auto-recovery evidence in docs/OPS_VALIDATION.md.
 - Continuous loop basic health check (when --run-loop is enabled):
   - Verify DB system_state loop_last_tick_ms advances.
   - Confirm metrics/log heartbeat entries (loop_alive / loop_heartbeat).
