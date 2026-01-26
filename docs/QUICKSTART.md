@@ -124,7 +124,12 @@ PYTHONPATH=src python3 tools/ops_recovery.py \
 
 ### Q4: 遇到 BACKFILL_WINDOW_EXCEEDED 怎麼辦？
 **原因：** 程式長時間離線，缺口超過回補窗口  
-**解決：** 參考 `docs/HumanRead.md` 第九節的詳細流程
+**快速方案：** 使用一鍵腳本
+```bash
+./tools/start_live_with_maintenance_skip.sh
+```
+
+**詳細處理流程：** 請參考 [TROUBLESHOOTING.md - 問題 3](TROUBLESHOOTING.md#問題-3-backfill_window_exceeded缺口超過回補窗口)
 
 ---
 
@@ -156,10 +161,26 @@ PYTHONPATH=src python3 tools/ops_validate_run.py \
 
 ## 📚 相關文檔
 
-- **詳細操作手冊：** `docs/HumanRead.md`（已更新）
-- **運維手冊：** `docs/RUNBOOK.md`
-- **測試計劃：** `docs/TEST_PLAN.md`
-- **代碼品質評估：** `docs/CODE_REVIEW.md`（新增）
+根據您的需求，選擇適合的文檔：
+
+### 🚀 日常使用文檔（繁體中文）
+- **[QUICKSTART.md](QUICKSTART.md)**（本文檔）
+  - 適合：第一次使用者
+  - 內容：基本啟動、概念理解、常見問題
+
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** ⭐ 推薦
+  - 適合：日常運維人員
+  - 內容：故障排除、監控清單、安全模式升級
+
+### 🔧 技術文檔（English）
+- **[RUNBOOK.md](RUNBOOK.md)**
+  - 適合：工程師、深度技術人員
+  - 內容：完整運維流程、所有邊緣案例處理
+
+### 📊 其他參考文檔
+- **[CODE_REVIEW.md](CODE_REVIEW.md)**：代碼品質評估報告（8.5/10）
+- **[TEST_PLAN.md](TEST_PLAN.md)**：測試計劃與驗證步驟
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**：系統架構設計
 
 ---
 
