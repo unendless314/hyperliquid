@@ -11,10 +11,18 @@ PYTHONPATH=src python3 tools/validate_config.py --config config/settings.prod.ya
 PYTHONPATH=src python3 tools/hash_config.py --config config/settings.prod.yaml
 ```
 
-## 三、啟動常駐
+## 三、啟動常駐（持續運行模式）
 ```bash
-PYTHONPATH=src python3 src/hyperliquid/main.py --mode live --config config/settings.prod.yaml
+PYTHONPATH=src python3 src/hyperliquid/main.py \
+  --mode live \
+  --config config/settings.prod.yaml \
+  --run-loop
 ```
+
+**重要說明：**
+- `--run-loop`：啟用持續運行模式（必須加上，否則執行一次就會退出）
+- 程式會持續監聽 Hyperliquid 事件，無需手動重啟
+- 使用 Ctrl+C 可優雅關閉程序
 
 ## 四、啟動後檢查（必要）
 ```bash
@@ -115,8 +123,12 @@ PYTHONPATH=src python3 tools/ops_recovery.py \
 
 3) 用 dry-run 啟動一次（驗證狀態）
 ```bash
-PYTHONPATH=src python3 src/hyperliquid/main.py --mode dry-run --config config/settings.prod.yaml
+PYTHONPATH=src python3 src/hyperliquid/main.py \
+  --mode dry-run \
+  --config config/settings.prod.yaml \
+  --run-loop
 ```
+**注意：**驗證後請按 Ctrl+C 停止，確認無異常後再進入 live 模式
 
 4) 把 `ingest.maintenance_skip_gap` 改回 `false`
 ```yaml
@@ -133,9 +145,12 @@ PYTHONPATH=src python3 tools/ops_recovery.py \
   --reason-message "Manual unhalt after verification"
 ```
 
-6) 再用 live 模式啟動
+6) 再用 live 模式啟動（持續運行）
 ```bash
-PYTHONPATH=src python3 src/hyperliquid/main.py --mode live --config config/settings.prod.yaml
+PYTHONPATH=src python3 src/hyperliquid/main.py \
+  --mode live \
+  --config config/settings.prod.yaml \
+  --run-loop
 ```
 
 補充：
