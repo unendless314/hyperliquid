@@ -2,28 +2,47 @@
 
 This is the primary documentation set for the refactored, modular system.
 
+## Quick Navigation
+
+**New to the project?** Start here:
+- 🚀 [QUICKSTART.md](QUICKSTART.md) - First-time user guide (Traditional Chinese)
+- 🔧 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Daily operations and troubleshooting (Traditional Chinese)
+
+**For engineers:**
+- 📚 [RUNBOOK.md](RUNBOOK.md) - Complete operational runbook
+- 🏗️ [ARCHITECTURE.md](ARCHITECTURE.md) - System design
+- 📊 [CODE_REVIEW.md](CODE_REVIEW.md) - Code quality assessment (8.5/10)
+
+---
+
 ## Development Approach
 Documentation is created up front but filled in progressively. During MVP, only the most
 critical documents are fully specified. Other documents may contain placeholders or partial
 content and will be completed as the system stabilizes.
 
 ## Document Map
-Progress
+
+### User Documentation (Traditional Chinese)
+- **QUICKSTART.md**: Quick start guide for first-time users
+- **TROUBLESHOOTING.md**: Daily operations, monitoring, and troubleshooting guide
+
+### Progress
 - ROADMAP.md: Epic/story/task tracking for delivery progress
 
-Core
+### Core Technical Documentation
 - ARCHITECTURE.md: System overview, module boundaries, data flow, state machine
 - CONTRACTS.md: Cross-module data contracts and shared terminology
 - DATA_MODEL.md: Database schema and persistence rules
 - INTEGRATIONS.md: External API integration details
-- RUNBOOK.md: Operations and incident response
+- RUNBOOK.md: Operations and incident response (complete technical reference)
 - TEST_PLAN.md: Test strategy and coverage
 - THREAT_MODEL.md: Risk analysis and mitigations
 - DEPLOYMENT.md: Build, release, and configuration strategy
 - ADR.md: Architecture decision records
 - OBSERVABILITY.md: Metrics, logging, alerting, SLO/SLA targets
+- CODE_REVIEW.md: Code quality assessment and improvement roadmap (8.5/10)
 
-Modules
+### Modules
 - modules/INGEST.md: Ingest/monitoring module spec
 - modules/DECISION.md: Decision/strategy module spec
 - modules/EXECUTION.md: Execution (order) module spec
@@ -32,7 +51,7 @@ Modules
 - modules/ORCHESTRATOR.md: Startup and lifecycle control spec
 - modules/OBSERVABILITY.md: Logging, metrics, alerting spec
 
-Archive
+### Archive
 - archive/: Legacy PRD and system design docs
 
 ## MVP Readiness
