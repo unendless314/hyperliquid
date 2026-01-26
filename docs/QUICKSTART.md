@@ -12,6 +12,9 @@
 - 必須使用 `--run-loop` 參數才能持續運行
 - 舊版命令會導致「執行一次就退出」的問題
 
+**配置檔提醒：**
+- 本文以 `config/settings.prod.yaml` 為例，若使用 `config/settings.yaml` 請替換對應路徑。
+
 ---
 
 ## 🚀 標準啟動流程
@@ -63,6 +66,11 @@ PYTHONPATH=src python3 src/hyperliquid/main.py \
 ### 步驟 3：啟動後檢查
 
 ```bash
+# 0. 啟動診斷（建議）
+PYTHONPATH=src python3 tools/ops_startup_doctor.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json
+
 # 1. 檢查安全狀態
 sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key IN ('safety_mode','safety_reason_code','safety_reason_message');"
 
@@ -124,12 +132,7 @@ PYTHONPATH=src python3 tools/ops_recovery.py \
 
 ### Q4: 遇到 BACKFILL_WINDOW_EXCEEDED 怎麼辦？
 **原因：** 程式長時間離線，缺口超過回補窗口  
-**快速方案：** 使用一鍵腳本
-```bash
-./tools/start_live_with_maintenance_skip.sh
-```
-
-**詳細處理流程：** 請參考 [TROUBLESHOOTING.md - 問題 3](TROUBLESHOOTING.md#問題-3-backfill_window_exceeded缺口超過回補窗口)
+**處理流程：** 請參考 [TROUBLESHOOTING.md - 問題 3](TROUBLESHOOTING.md#問題-3-backfill_window_exceeded缺口超過回補窗口)
 
 ---
 

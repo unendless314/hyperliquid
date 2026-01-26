@@ -2,6 +2,10 @@
 
 ## Startup
 
+Note:
+- This runbook uses config/settings.yaml in examples. If you operate with config/settings.prod.yaml (or another file),
+  replace the paths consistently.
+
 Prerequisites:
 - config/settings.yaml validated
 - config_hash computed and recorded
@@ -211,26 +215,11 @@ Notes:
 - maintenance-skip requires ingest.maintenance_skip_gap=true in config.
 - unhalt/promote are explicit operator actions and should be recorded in ops evidence.
 
-### Maintenance Skip Helper Script (Temporary)
-`tools/start_live_with_maintenance_skip.sh` is a convenience helper added post‑MVP to speed up gap recovery.
-It is not a fully hardened ops tool yet; treat it as temporary and use with care.
+### Startup Doctor (Recommended)
+Use tools/ops_startup_doctor.py to read safety state, identify blockers, and show suggested next actions.
 
-Intended use:
-- Only when safety_mode=HALT with reason_code=BACKFILL_WINDOW_EXCEEDED.
-- Operator is present and will verify positions before any promotion to ARMED_LIVE.
-- Use for a single recovery event only; do not treat this as a normal startup path.
-
-Risks/limitations:
-- Uses simple text edits on the config file; YAML layout changes can break it.
-- Does not write evidence by itself; you must record outputs in ops evidence.
-- If the process is terminated abruptly (power loss), config restoration may not complete.
-
-Operational requirements:
-- Always run config validation + hash before/after.
-- Capture evidence via tools/ops_validate_run.py and note maintenance_skip_gap toggles.
-- Prefer manual promotion to ARMED_LIVE after verification.
-If automation is desired later, convert this script into a Python tool with YAML parsing,
-dry‑run support, and explicit evidence output.
+Example:
+- PYTHONPATH=src python3 tools/ops_startup_doctor.py --config config/settings.yaml --schema config/schema.json
 
 ## Long Downtime Recovery (Gap Exceeded)
 Use this flow when the system has been offline long enough to exceed backfill_window_ms.

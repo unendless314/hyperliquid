@@ -83,8 +83,9 @@ def test_map_error_to_result() -> None:
     assert result.error_code == "EXCHANGE_ERROR"
 
 
-def test_fetch_positions_uses_max_update_time() -> None:
+def test_fetch_positions_uses_fetch_time() -> None:
     adapter = binance.BinanceExecutionAdapter(_build_live_config())
+    adapter._client._current_timestamp_ms = lambda: 2500
     payload = [
         {"symbol": "BTC-USDT", "positionAmt": "0.5", "updateTime": 1000},
         {"symbol": "ETHUSDT", "positionAmt": "-0.1", "updateTime": 2000},
@@ -92,18 +93,19 @@ def test_fetch_positions_uses_max_update_time() -> None:
     ]
     adapter._client.fetch_positions = lambda: payload
     positions, timestamp_ms = adapter.fetch_positions()
-    assert timestamp_ms == 2000
+    assert timestamp_ms == 2500
     assert positions["BTCUSDT"] == 0.75
     assert positions["ETHUSDT"] == -0.1
 
 
-def test_fetch_positions_missing_update_time_returns_zero_timestamp() -> None:
+def test_fetch_positions_missing_update_time_returns_fetch_time() -> None:
     adapter = binance.BinanceExecutionAdapter(_build_live_config())
+    adapter._client._current_timestamp_ms = lambda: 1234
     payload = [{"symbol": "BTCUSDT", "positionAmt": "0.1", "updateTime": 0}]
     adapter._client.fetch_positions = lambda: payload
     positions, timestamp_ms = adapter.fetch_positions()
     assert positions["BTCUSDT"] == 0.1
-    assert timestamp_ms == 0
+    assert timestamp_ms == 1234
 
 
 def test_parse_exchange_info_filters() -> None:

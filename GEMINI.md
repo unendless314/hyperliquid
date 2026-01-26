@@ -4,69 +4,73 @@ A production-grade, event-driven copy trading system designed to replicate trade
 
 ## Project Overview
 
-This project implements a robust "Chain-to-CEX" copy trading pipeline. It prioritizes data integrity, deterministic replay, and fund safety over pure speed. The system is architected around a set of decoupled modules coordinated by a central orchestrator, using SQLite as the Single Source of Truth (SSOT).
+This project implements a "Chain-to-CEX" copy trading pipeline. It prioritizes data integrity, deterministic replay, and fund safety. The system is architected around decoupled modules coordinated by a central orchestrator, using SQLite as the Single Source of Truth (SSOT).
 
 ### Key Features
-*   **Event-Driven Architecture:** Reacts to on-chain events from Hyperliquid.
-*   **Safety First:** Includes strict risk gates, circuit breakers, and "Safe Mode" states to prevent unauthorized exposure.
-*   **Deterministic Recovery:** Uses SQLite to persist cursors and state, ensuring safe restarts without double-execution.
+*   **Event-Driven:** Reacts to on-chain events from Hyperliquid (fills).
+*   **Safety First:** strict risk gates, circuit breakers, and "Safe Mode" states.
+*   **Deterministic Recovery:** Persists cursors and state in SQLite to ensure safe restarts.
 *   **Reconciliation:** Periodically checks for drift between local state and the exchange.
 
-### Architecture
-The system is divided into the following core modules (see `docs/ARCHITECTURE.md`):
-*   **Ingest:** Monitors Hyperliquid (WS/REST) and produces standardized `PositionDeltaEvent`s.
-*   **Decision:** Applies risk logic and strategy to generate `OrderIntent`s.
+## Architecture
+
+The system is divided into core modules (see `docs/ARCHITECTURE.md`):
+*   **Ingest:** Monitors Hyperliquid (WS/REST) and produces `PositionDeltaEvent`s.
+*   **Decision:** Applies risk logic/strategy to generate `OrderIntent`s.
 *   **Execution:** Handles order lifecycle on Binance, ensuring idempotency.
 *   **Safety:** Monitors system health and reconciliation drift.
 *   **Storage:** Manages SQLite persistence.
+*   **Orchestrator:** Manages lifecycle and startup state machine.
 
-## Building and Running
+## Setup & Installation
 
-### Prerequisites
-*   Python 3.10+
-*   Dependencies installed via `pip` (see `requirements.txt`)
-
-### Setup
 1.  **Environment:**
     ```bash
-    python -m venv .venv
+    python3 -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
     ```
+
 2.  **Configuration:**
-    *   Create a `settings.yaml` file (schema validation available).
-    *   Compute config hash: `python tools/hash_config.py --config settings.yaml`
+    *   Copy/Edit `config/settings.yaml`.
+    *   Validate with: `python tools/validate_config.py --config config/settings.yaml --schema config/schema.json`
 
-### Execution Commands
-*   **Live Mode:**
-    ```bash
-    python main.py --mode live --config settings.yaml
-    ```
-*   **Dry-Run Mode (Safe Testing):**
-    ```bash
-    python main.py --mode dry-run --config settings.yaml
-    ```
-*   **Backfill Only:**
-    ```bash
-    python main.py --mode backfill-only --config settings.yaml
-    ```
+## Usage (CLI)
 
-### Utilities
-*   **Validate Config:**
-    ```bash
-    python tools/validate_config.py --config settings.yaml --schema config/schema.json
-    ```
+Entry point: `src/hyperliquid/main.py`.
 
-## Development Conventions
+### Modes
+*   `--mode live`: Real trading on Binance.
+*   `--mode dry-run`: Simulate execution without placing real orders.
+*   `--mode backfill-only`: Process historical data only.
 
-*   **Documentation-Driven:** Major architectural decisions and specs are documented in `docs/` before implementation.
-*   **Modular Design:** Code should be strictly separated into modules (`Ingest`, `Decision`, `Execution`, etc.) with clear contracts (`docs/CONTRACTS.md`).
-*   **SQLite as SSOT:** All critical state (cursors, orders, alerts) must be persisted to SQLite.
-*   **Safety Gates:** Changes that increase risk exposure must pass through rigorous checks.
-*   **Testing:** Requires unit tests for logic and integration tests (Binance Testnet) for execution flows.
+### Arguments
+*   `--config <path>`: Path to settings YAML (Required).
+*   `--run-loop`: Enter continuous run loop after startup.
+*   `--emit-boot-event`: Emit a mock event on startup (Default: True).
+*   `--loop-interval-sec <int>`: Idle sleep interval for run loop.
+
+### Examples
+```bash
+# Run in Dry-Run mode
+python -m src.hyperliquid.main --mode dry-run --config config/settings.yaml
+
+# Run Live with continuous loop
+python -m src.hyperliquid.main --mode live --config config/settings.prod.yaml --run-loop
+```
+
+## Development & Testing
+
+*   **Unit Tests:** `pytest tests/unit`
+*   **Integration Tests:** `pytest tests/integration` (may require env vars or testnet keys)
+*   **Code Structure:**
+    *   `src/hyperliquid/`: Source code.
+    *   `tests/`: Test suite.
+    *   `docs/`: Comprehensive documentation.
+    *   `tools/`: Operational scripts (hash config, recovery, etc.).
 
 ## Key Documentation
-*   `docs/README.md`: Entry point for all documentation.
-*   `docs/ARCHITECTURE.md`: High-level system design and state machine.
-*   `docs/RUNBOOK.md`: Operational procedures and incident response.
-*   `docs/DEPLOYMENT.md`: Detailed deployment steps.
+*   `docs/README.md`: Main entry point.
+*   `docs/ARCHITECTURE.md`: System design and state machine.
+*   `docs/RUNBOOK.md`: Operational procedures.
+*   `docs/QUICKSTART.md`: User guide (Traditional Chinese).

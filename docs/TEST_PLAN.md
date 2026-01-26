@@ -150,7 +150,7 @@ Checklist:
   - dry-run: no external order placement (adapter disabled); order_results may be written.
   - live: safety_mode != HALT after startup.
   - backfill-only: cursor advances; no external order placement (adapter disabled); order_results may be written.
-- If maintenance_skip_gap is used (including tools/start_live_with_maintenance_skip.sh):
+- If maintenance_skip_gap is used:
   - Record the toggle timestamps and config restoration.
   - Record safety_reason_code and any manual promotion steps.
   - Attach evidence from tools/ops_validate_run.py.

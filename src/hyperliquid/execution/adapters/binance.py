@@ -79,17 +79,35 @@ class BinanceApiError(Exception):
     message: str
     status_code: int
 
+    def __str__(self) -> str:
+        return f"BinanceApiError(code={self.code}, message={self.message}, status_code={self.status_code})"
+
 
 class BinanceNetworkError(Exception):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"BinanceNetworkError: {self.message}"
 
 
 class BinanceRateLimitError(Exception):
-    pass
+    def __init__(self, message: str = "Rate limit exceeded") -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"BinanceRateLimitError: {self.message}"
 
 
 class BinanceTimeoutError(Exception):
-    pass
+    def __init__(self, message: str = "Request timeout") -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"BinanceTimeoutError: {self.message}"
 
 
 @dataclass(frozen=True)
@@ -271,8 +289,8 @@ class BinanceExecutionAdapter:
         if self._config.mode != "live":
             raise AdapterNotImplementedError("Binance execution adapter is not wired")
         payload = self._client.fetch_positions()
+        fetch_time_ms = self._client._current_timestamp_ms()
         positions: dict[str, float] = {}
-        latest_update_ms: int | None = None
         for entry in payload:
             symbol = str(entry.get("symbol", ""))
             if not symbol:
@@ -281,24 +299,11 @@ class BinanceExecutionAdapter:
                 position_amt = float(entry.get("positionAmt", 0.0) or 0.0)
             except (TypeError, ValueError):
                 continue
-            try:
-                update_ms = int(entry.get("updateTime", 0) or 0)
-            except (TypeError, ValueError):
-                update_ms = 0
-            if update_ms > 0 and (latest_update_ms is None or update_ms > latest_update_ms):
-                latest_update_ms = update_ms
             if position_amt == 0.0:
                 continue
             key = _normalize_binance_symbol(symbol)
             positions[key] = positions.get(key, 0.0) + position_amt
-        if latest_update_ms is None:
-            latest_update_ms = 0
-        if latest_update_ms == 0:
-            try:
-                latest_update_ms = self._client._current_timestamp_ms()
-            except Exception:
-                latest_update_ms = int(time.time() * 1000)
-        return positions, latest_update_ms
+        return positions, fetch_time_ms
 
     def fetch_mark_price(self, symbol: str) -> Decimal:
         if not self._config.enabled:

@@ -5,6 +5,7 @@
 
 > 💡 **第一次使用？** 請先閱讀 [QUICKSTART.md](QUICKSTART.md)  
 > 📚 **需要完整技術細節？** 請參考英文版 [RUNBOOK.md](RUNBOOK.md)
+> 🔧 **配置檔提醒：** 本文以 `config/settings.prod.yaml` 為例，若使用 `config/settings.yaml` 請替換對應路徑。
 
 ---
 
@@ -22,6 +23,13 @@
 ### 每日必做檢查（3 分鐘內）
 
 目標：確保系統持續運行，沒有卡住、降級或異常。
+
+#### 0) 啟動診斷（建議）
+```bash
+PYTHONPATH=src python3 tools/ops_startup_doctor.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json
+```
 
 #### 1) 確認安全狀態
 ```bash
@@ -127,16 +135,7 @@ sqlite3 data/hyperliquid_prod.db "SELECT value FROM system_state WHERE key='safe
 
 **快速恢復流程：**
 
-#### 方法 A：使用一鍵腳本（推薦）
-```bash
-./tools/start_live_with_maintenance_skip.sh
-```
-**說明：**
-- 腳本會自動處理 `maintenance_skip_gap` 的開關
-- 程式結束後自動還原配置
-- ⚠️ 這會跳過缺口期間的事件！
-
-#### 方法 B：手動詳細流程
+#### 手動詳細流程
 
 **步驟 1：** 開啟 maintenance skip（暫時）
 編輯 `config/settings.prod.yaml`：
