@@ -34,6 +34,7 @@ Core goals:
    - Startup reconciliation
    - Periodic drift checks
    - Enters ARMED_SAFE or HALT on critical issues
+   - Baseline positions to reconcile external/manual holdings
 
 6. Orchestrator/Config
    - Loads settings and validates schema

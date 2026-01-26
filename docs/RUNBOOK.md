@@ -120,7 +120,7 @@ Checklist (record evidence using docs/OPS_VALIDATION.md; keep evidence in docs/o
 - Decision strategy version set and documented (see docs/modules/DECISION.md acceptance).
 - DB schema version confirmed:
   - sqlite3 <db_path> "select value from system_state where key='schema_version';"
-  - If schema_version < 3, rebuild DB before live use (do not reuse old DBs).
+- If schema_version < 4, rebuild the DB before live use (do not reuse old DBs). If there is no legacy DB to preserve, you can delete it and let the service recreate the DB.
 - Key integration tests executed per docs/TEST_PLAN.md (record date + results).
 - Rollback triggers and escalation path reviewed with operator on duty.
 
@@ -221,6 +221,19 @@ Use tools/ops_startup_doctor.py to read safety state, identify blockers, and sho
 Example:
 - PYTHONPATH=src python3 tools/ops_startup_doctor.py --config config/settings.yaml --schema config/schema.json
 
+### Baseline Positions
+When exchange has external/manual positions, a baseline snapshot is required to avoid RECONCILE_CRITICAL.
+Tools:
+- tools/ops_sync_positions.py (capture active baseline; audited)
+- tools/ops_reset_baseline.py (clear baseline; audited)
+
+Flow:
+1) Sync baseline before first live start (or after manual adjustments).
+   - PYTHONPATH=src python3 tools/ops_sync_positions.py --config config/settings.yaml --schema config/schema.json --operator "<name>" --reason-message "Baseline sync"
+2) Verify baseline created_at_ms is recent (via ops_startup_doctor).
+3) Proceed with normal reconcile and promotion flow.
+4) If you need to replace the baseline, rerun ops_sync_positions with --replace.
+
 ## Long Downtime Recovery (Gap Exceeded)
 Use this flow when the system has been offline long enough to exceed backfill_window_ms.
 Goal: recover safely with auditable evidence and avoid silent cursor jumps.
@@ -307,7 +320,7 @@ Initiate rollback or disable trading when any of the following are observed:
 ### Schema Updates
 - Apply migration scripts manually during MVP (preferred: rebuild DB if possible).
 - Verify schema version and system_state.
-- DB_SCHEMA_VERSION=3 adds audit_log (and requires order_results.contract_version).
+- DB_SCHEMA_VERSION=4 adds baseline tables (and DB_SCHEMA_VERSION=3 adds audit_log / order_results.contract_version).
 - If rebuilding:
   1. Stop the service.
   2. Backup existing DB: `cp <db_path> <db_path>.bak-YYYYMMDD-HHMM`

@@ -47,8 +47,9 @@ def test_maintenance_skip_applies_only_for_gap_halt(db_conn, db_path) -> None:
     events = coordinator.run_once(db_conn, mode="live")
 
     assert events == []
-    assert get_system_state(db_conn, "safety_mode") == "ARMED_SAFE"
-    assert get_system_state(db_conn, "safety_reason_code") == "MAINTENANCE_SKIP_GAP"
+    assert get_system_state(db_conn, "safety_mode") == "HALT"
+    assert get_system_state(db_conn, "safety_reason_code") == "BACKFILL_WINDOW_EXCEEDED"
+    assert get_system_state(db_conn, "maintenance_skip_applied_ms") is not None
     event_key = get_system_state(db_conn, "last_processed_event_key")
     assert event_key is not None and "maintenance" in event_key
 

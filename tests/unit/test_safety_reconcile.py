@@ -42,6 +42,45 @@ def test_load_local_positions_from_orders(db_conn) -> None:
     assert positions["BTCUSDT"] == 1.0
 
 
+def test_load_local_positions_from_orders_since_ms(db_conn) -> None:
+    persistence = DbPersistence(db_conn)
+
+    intent = OrderIntent(
+        correlation_id="hl-abc-11-BTCUSDT",
+        client_order_id=None,
+        symbol="BTCUSDT",
+        side="BUY",
+        order_type="MARKET",
+        qty=1.0,
+        price=None,
+        reduce_only=0,
+        time_in_force="IOC",
+        is_replay=0,
+        risk_notes=None,
+    )
+    persistence.ensure_intent(intent)
+    result = OrderResult(
+        correlation_id=intent.correlation_id,
+        exchange_order_id="ex-2",
+        status="FILLED",
+        filled_qty=1.0,
+        avg_price=100.0,
+        error_code=None,
+        error_message=None,
+    )
+    persistence.record_result(result)
+    db_conn.execute(
+        "UPDATE order_results SET created_at_ms = ? WHERE correlation_id = ?",
+        (int(time.time() * 1000) - 10000, intent.correlation_id),
+    )
+    db_conn.commit()
+
+    positions = load_local_positions_from_orders(
+        db_conn, since_ms=int(time.time() * 1000)
+    )
+    assert positions == {}
+
+
 def test_reconcile_snapshot_stale() -> None:
     now_ms = int(time.time() * 1000)
     local = PositionSnapshot(source="db", positions={"BTCUSDT": 1.0}, timestamp_ms=now_ms)

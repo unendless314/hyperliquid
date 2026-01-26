@@ -5,6 +5,7 @@ from pathlib import Path
 
 from hyperliquid.common.settings import load_settings
 from hyperliquid.storage.db import DB_SCHEMA_VERSION
+from hyperliquid.storage.baseline import load_active_baseline
 
 
 def _print_kv(lines: list[str], label: str, value) -> None:
@@ -130,6 +131,9 @@ def main() -> int:
                 _print_kv(lines, "maintenance_skip_applied_ms", _read_system_state(conn, "maintenance_skip_applied_ms"))
                 _print_kv(lines, "adapter_last_success_ms", _read_system_state(conn, "adapter_last_success_ms"))
                 _print_kv(lines, "adapter_last_error_ms", _read_system_state(conn, "adapter_last_error_ms"))
+                baseline = load_active_baseline(conn)
+                _print_kv(lines, "baseline_id", baseline.baseline_id if baseline else "")
+                _print_kv(lines, "baseline_created_at_ms", baseline.created_at_ms if baseline else "")
 
                 if schema_version and schema_version != DB_SCHEMA_VERSION:
                     blockers.append("schema_version_mismatch")
@@ -145,6 +149,12 @@ def main() -> int:
                             reason_code, config_path=config_path, schema_path=schema_path
                         )
                     )
+                    if (
+                        reason_code == "RECONCILE_CRITICAL"
+                        and "missing_exchange" in (reason_message or "")
+                        and baseline is None
+                    ):
+                        suggestions.append("Exchange-only positions detected; sync baseline positions.")
                 elif safety_mode == "ARMED_SAFE":
                     warnings.append("ARMED_SAFE")
                     suggestions.extend(

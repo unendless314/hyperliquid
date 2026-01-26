@@ -21,6 +21,7 @@ def _build_settings(root: Path) -> Settings:
         log_level="INFO",
         config_path=root / "settings.yaml",
         raw={
+            "decision": {"strategy_version": "v1"},
             "execution": {"binance": {"enabled": False, "mode": "stub"}},
             "ingest": {
                 "backfill_window_ms": 600000,

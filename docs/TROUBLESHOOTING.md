@@ -6,6 +6,7 @@
 > 💡 **第一次使用？** 請先閱讀 [QUICKSTART.md](QUICKSTART.md)  
 > 📚 **需要完整技術細節？** 請參考英文版 [RUNBOOK.md](RUNBOOK.md)
 > 🔧 **配置檔提醒：** 本文以 `config/settings.prod.yaml` 為例，若使用 `config/settings.yaml` 請替換對應路徑。
+> 🧭 **基準持倉提醒：** 若交易所帳戶已有外部/手動持倉，需先同步 baseline 才能避免 RECONCILE_CRITICAL。
 
 ---
 

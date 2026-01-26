@@ -48,7 +48,8 @@
 ## Maintenance Restart
 - For planned downtime, use an explicit maintenance flag (config: ingest.maintenance_skip_gap=true) to skip gap enforcement on restart.
 - When maintenance skip is used:
-  - Set cursor to now, log a reason code, and start in ARMED_SAFE.
-  - Manual promotion to ARMED_LIVE is required.
+  - Set cursor to now and record maintenance_skip_applied_ms (evidence only).
+  - safety_mode remains HALT until auto-recovery or manual unhalt.
+  - After unhalt, trading resumes in ARMED_SAFE (reduce-only), then manual promotion to ARMED_LIVE is required.
 - This flow transfers gap reconciliation risk to the operator and does not guarantee backfill consistency.
 - Maintenance skip only applies to gap-related HALT (reason_code=BACKFILL_WINDOW_EXCEEDED); other HALT reasons must not be bypassed.

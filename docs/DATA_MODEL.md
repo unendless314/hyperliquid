@@ -119,6 +119,33 @@ Indexes:
 - idx_audit_log_entity_id (entity_id)
 - idx_audit_log_timestamp_ms (timestamp_ms)
 
+### baseline_snapshots
+Stores operator-approved baseline snapshots for external/manual positions.
+
+Columns:
+- baseline_id TEXT PRIMARY KEY (UUID)
+- created_at_ms INTEGER NOT NULL
+- operator TEXT
+- reason_message TEXT
+- active INTEGER NOT NULL DEFAULT 1
+
+Indexes:
+- idx_baseline_snapshots_active (active, created_at_ms)
+
+### baseline_positions
+Stores per-symbol positions for a baseline snapshot.
+
+Columns:
+- baseline_id TEXT NOT NULL
+- symbol TEXT NOT NULL
+- qty REAL NOT NULL
+
+Primary Key:
+- (baseline_id, symbol)
+
+Indexes:
+- idx_baseline_positions_baseline_id (baseline_id)
+
 ## Correlation and Idempotency
 - correlation_id must be stable and derived from PositionDeltaEvent.
 - order_intents + order_results allow restart-safe recovery.

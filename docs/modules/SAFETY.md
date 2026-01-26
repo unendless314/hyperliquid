@@ -37,6 +37,22 @@
 - If exchange snapshot is stale, enter ARMED_SAFE with reason_code=SNAPSHOT_STALE.
 - If either side is missing a symbol present on the other side, enter HALT with reason_code=RECONCILE_CRITICAL.
 
+## Baseline Positions
+Motivation: production accounts can have external/manual positions not created by the system.
+Without a baseline, any exchange-only symbol causes HALT (RECONCILE_CRITICAL).
+
+Approach:
+- Maintain a single active baseline snapshot (symbol -> qty) captured by an operator.
+- Baseline metadata must include created_at_ms (or baseline_id) for freshness tracking.
+- Reconciliation uses: baseline_positions + local_orders_delta vs exchange positions.
+- Operators can replace/reset the baseline explicitly (audited).
+- Baseline missing still triggers RECONCILE_CRITICAL until a baseline is synced.
+
+Operational requirements:
+- Baseline sync is an explicit operator action and must write an audit log entry with a reason_message.
+- Startup doctor should show whether a baseline exists and its created_at_ms.
+- If exchange has positions but baseline is missing, startup doctor should warn and suggest baseline sync.
+
 ## Runtime Safety Modes (Continuous Operation)
 - HALT: keep the process running for monitoring/reconcile/heartbeat, pause ingest, and block all trading.
 - ARMED_SAFE: allow reduce-only intents; block exposure increases.

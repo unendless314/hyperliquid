@@ -30,7 +30,7 @@ from hyperliquid.ingest.service import IngestService, RawPositionEvent
 from hyperliquid.safety.reconcile import PositionSnapshot, ReconciliationResult
 from hyperliquid.safety.service import SafetyService
 from hyperliquid.storage.db import assert_schema_version, get_system_state, init_db, set_system_state
-from hyperliquid.storage.positions import load_local_positions_from_orders
+from hyperliquid.storage.positions import load_local_positions
 from hyperliquid.storage.safety import load_safety_state, set_safety_state
 from hyperliquid.storage.persistence import DbPersistence
 
@@ -213,7 +213,7 @@ class Orchestrator:
 
         def decision_inputs_provider(event: PositionDeltaEvent) -> DecisionInputs:
             safety_mode = safety_mode_provider()
-            positions = load_local_positions_from_orders(conn)
+            positions = load_local_positions(conn)
             symbol_key = normalize_execution_symbol(event.symbol)
             local_position = float(positions.get(symbol_key, 0.0))
             expected_price = None
@@ -328,7 +328,7 @@ class Orchestrator:
             return None, None
 
         now_ms = int(time.time() * 1000)
-        local_positions = load_local_positions_from_orders(conn)
+        local_positions = load_local_positions(conn)
         local_snapshot = PositionSnapshot(
             source="local",
             positions=local_positions,
