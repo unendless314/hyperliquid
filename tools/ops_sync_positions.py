@@ -2,6 +2,11 @@ import argparse
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file to ensure environment variables are available
+load_dotenv()
+
 from hyperliquid.common.settings import load_settings
 from hyperliquid.execution.adapters.binance import BinanceExecutionAdapter, BinanceExecutionConfig
 from hyperliquid.storage.baseline import insert_baseline, load_active_baseline

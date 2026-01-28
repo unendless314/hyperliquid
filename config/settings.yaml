@@ -68,7 +68,7 @@ execution:
   binance:
     enabled: true
     mode: "live"
-    base_url: "https://testnet.binancefuture.com"
+    base_url: "https://fapi.binance.com"
     request_timeout_ms: 10000
     recv_window_ms: 5000
     exchange_info_enabled: true

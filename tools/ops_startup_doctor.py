@@ -3,6 +3,11 @@ import sqlite3
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file to ensure environment variables are available
+load_dotenv()
+
 from hyperliquid.common.settings import load_settings
 from hyperliquid.storage.db import DB_SCHEMA_VERSION
 from hyperliquid.storage.baseline import load_active_baseline
