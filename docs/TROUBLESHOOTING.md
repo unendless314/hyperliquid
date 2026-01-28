@@ -42,11 +42,11 @@ sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key 
 
 #### 2) 確認事件持續處理
 ```bash
-sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key LIKE 'last_processed_%';"
+sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key IN ('last_ingest_success_ms','last_processed_timestamp_ms');"
 ```
 **期望結果：**
-- `last_processed_timestamp_ms` 接近當前時間
-- 如果時間戳停住，代表 ingest 卡住
+- `last_ingest_success_ms` 接近當前時間（代表 ingest 正常拉取，即使沒有成交）
+- `last_processed_timestamp_ms` 只在有成交事件時更新；低頻策略長時間不變是正常現象
 
 #### 3) 檢查錯誤日誌
 ```bash
@@ -132,7 +132,8 @@ sqlite3 data/hyperliquid_prod.db "SELECT value FROM system_state WHERE key='safe
 - 日誌出現 `ingest_gap_exceeded`
 - `safety_mode=HALT`, `reason_code=BACKFILL_WINDOW_EXCEEDED`
 
-**原因：** 程式長時間離線，事件缺口超過配置的回補窗口
+**原因：** ingest 拉取中斷超過回補窗口（以 last_ingest_success_ms 判定）
+> 註：低頻策略「沒有成交」不會再因事件時間差而 HALT，事件時間差只會記錄 warning（log: ingest_event_gap_exceeded）。
 
 **快速恢復流程：**
 

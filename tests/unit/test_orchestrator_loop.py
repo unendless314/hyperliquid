@@ -4,7 +4,7 @@ from pathlib import Path
 from hyperliquid.common.metrics import MetricsEmitter
 from hyperliquid.common.settings import Settings
 from hyperliquid.orchestrator.service import Orchestrator
-from hyperliquid.storage.db import get_system_state
+from hyperliquid.storage.db import get_system_state, set_system_state
 from hyperliquid.storage.safety import set_safety_state
 
 
@@ -90,6 +90,18 @@ def test_loop_restart_does_not_rewind_cursor(db_conn, db_path, tmp_path, monkeyp
     assert first_cursor == 1000
     assert second_cursor >= first_cursor
     metrics.close()
+
+
+def test_bootstrap_seeds_ingest_success_from_last_processed(
+    db_conn, db_path, tmp_path, monkeypatch
+) -> None:
+    set_system_state(db_conn, "last_processed_timestamp_ms", "123456")
+    db_conn.execute("DELETE FROM system_state WHERE key = ?", ("last_ingest_success_ms",))
+    monkeypatch.setattr("time.time", lambda: 9999.0)
+
+    Orchestrator._ensure_bootstrap_state(db_conn)
+
+    assert get_system_state(db_conn, "last_ingest_success_ms") == "123456"
 
 
 def test_loop_idle_backoff_sleeps(db_conn, db_path, tmp_path, monkeypatch) -> None:

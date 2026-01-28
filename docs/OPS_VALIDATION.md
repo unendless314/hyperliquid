@@ -42,6 +42,8 @@ hash_config_stderr:
 - system_state (last_processed_*):
   - last_processed_timestamp_ms|1769075649037
   - last_processed_event_key|1769075649037|0|boot|BTCUSDT
+- system_state (ingest health):
+  - last_ingest_success_ms|1769075649037
 - order_results count: 0
 - audit_log count: 0
 - metrics tail snippet:
@@ -64,6 +66,7 @@ hash_config_stderr:
   - safety_reason_message=Exchange snapshot is stale
   - last_processed_timestamp_ms=0
   - last_processed_event_key=
+  - last_ingest_success_ms=0
   - order_results_count=0
   - audit_log_count=0
 
@@ -165,6 +168,7 @@ Note: Production live evidence should follow docs/RUNBOOK.md (Production Live Mi
   - Create temp config `/tmp/ops_backfill.yaml` with db_path data/ops_backfill.db
   - Set ingest.hyperliquid.enabled=true, mode=stub, backfill_window_ms=1000
   - Set system_state.last_processed_timestamp_ms to now-5000
+  - Set system_state.last_ingest_success_ms to now-5000 (if missing, bootstrap seeds from last_processed)
   - Run: PYTHONPATH=src python3 src/hyperliquid/main.py --mode backfill-only --config /tmp/ops_backfill.yaml
 - Expected:
   - safety_mode=HALT, safety_reason_code=BACKFILL_WINDOW_EXCEEDED

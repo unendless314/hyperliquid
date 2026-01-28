@@ -29,11 +29,16 @@
 - Updated cursor in Storage
 
 ## Key Rules
-- If gap > backfill_window: enter HALT
+- If ingest success gap > backfill_window: enter HALT
+- Event-time gap > backfill_window emits warning only (no HALT)
 - In HALT, stop ingesting and do not advance cursor until manual action clears the gap
 - Cursor moves only after event is persisted
 - Backfill uses overlap window; rely on dedup
 - Poison messages are isolated and skipped
+
+## Health Signals
+- last_ingest_success_ms: updated on successful ingest poll/backfill (REST/WS returns a response, even if 0 events). Used for HALT gap checks.
+- last_processed_timestamp_ms: updated only when events are ingested. Used as the cursor and for event-time gap warnings.
 
 ## Replay Policy and Scope
 - Replay refers only to backfilled events from Ingest (WS gap -> REST backfill).

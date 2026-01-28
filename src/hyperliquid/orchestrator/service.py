@@ -144,6 +144,11 @@ class Orchestrator:
         now_ms = int(time.time() * 1000)
         if get_system_state(conn, "last_processed_timestamp_ms") is None:
             set_system_state(conn, "last_processed_timestamp_ms", "0")
+        last_ingest_success = get_system_state(conn, "last_ingest_success_ms")
+        if last_ingest_success is None or str(last_ingest_success) == "0":
+            last_processed = int(get_system_state(conn, "last_processed_timestamp_ms") or 0)
+            seed_ms = last_processed if last_processed > 0 else now_ms
+            set_system_state(conn, "last_ingest_success_ms", str(seed_ms))
         if get_system_state(conn, "last_processed_event_key") is None:
             set_system_state(conn, "last_processed_event_key", "")
         if get_system_state(conn, "safety_mode") is None:

@@ -170,8 +170,14 @@ class HyperliquidIngestAdapter:
         return self._config
 
     def fetch_backfill(self, *, since_ms: int, until_ms: int) -> List[RawPositionEvent]:
+        events, _ = self.fetch_backfill_with_status(since_ms=since_ms, until_ms=until_ms)
+        return events
+
+    def fetch_backfill_with_status(
+        self, *, since_ms: int, until_ms: int
+    ) -> tuple[List[RawPositionEvent], bool]:
         if not self._config.enabled:
-            return []
+            return [], False
         if not self._rate_limiter.allow():
             self._logger.warning(
                 "ingest_rate_limited",
@@ -180,16 +186,20 @@ class HyperliquidIngestAdapter:
                     "cooldown_seconds": self._rate_limiter.cooldown_seconds,
                 },
             )
-            return []
+            return [], False
         if self._config.mode == "stub":
-            return self._filter_stub_events(since_ms=since_ms, until_ms=until_ms)
+            return self._filter_stub_events(since_ms=since_ms, until_ms=until_ms), True
         if self._config.mode == "live":
             return self._fetch_backfill_live(since_ms=since_ms, until_ms=until_ms)
         raise NotImplementedError(f"Unsupported ingest mode: {self._config.mode}")
 
     def poll_live_events(self, *, since_ms: int) -> List[RawPositionEvent]:
+        events, _ = self.poll_live_events_with_status(since_ms=since_ms)
+        return events
+
+    def poll_live_events_with_status(self, *, since_ms: int) -> tuple[List[RawPositionEvent], bool]:
         if not self._config.enabled:
-            return []
+            return [], False
         if not self._rate_limiter.allow():
             self._logger.warning(
                 "ingest_rate_limited",
@@ -198,12 +208,12 @@ class HyperliquidIngestAdapter:
                     "cooldown_seconds": self._rate_limiter.cooldown_seconds,
                 },
             )
-            return []
+            return [], False
         if self._config.mode == "stub":
-            return self._filter_stub_events(since_ms=since_ms, until_ms=None)
+            return self._filter_stub_events(since_ms=since_ms, until_ms=None), True
         if self._config.mode == "live":
             if self._ws_enabled and self._ws_recent():
-                return self._poll_live_ws(since_ms=since_ms)
+                return self._poll_live_ws(since_ms=since_ms), True
             return self._poll_live_rest(since_ms=since_ms)
         raise NotImplementedError(f"Unsupported ingest mode: {self._config.mode}")
 
@@ -223,11 +233,14 @@ class HyperliquidIngestAdapter:
             events.append(replace(event, timestamp_ms=timestamp_ms))
         return events
 
-    def _fetch_backfill_live(self, *, since_ms: int, until_ms: int) -> List[RawPositionEvent]:
+    def _fetch_backfill_live(
+        self, *, since_ms: int, until_ms: int
+    ) -> tuple[List[RawPositionEvent], bool]:
         if not self._config.target_wallet:
             self._logger.warning("ingest_missing_target_wallet")
-            return []
+            return [], False
         events: List[RawPositionEvent] = []
+        success = False
         end_time = until_ms
         while end_time >= since_ms:
             payload = {
@@ -237,7 +250,9 @@ class HyperliquidIngestAdapter:
                 "endTime": end_time,
                 "aggregateByTime": False,
             }
-            fills = self._post_json(payload)
+            fills, ok = self._post_json(payload)
+            if ok:
+                success = True
             if not fills:
                 break
             batch = self._fills_to_events(fills)
@@ -246,12 +261,12 @@ class HyperliquidIngestAdapter:
             if oldest is None or oldest <= since_ms:
                 break
             end_time = oldest - 1
-        return events
+        return events, success
 
-    def _poll_live_rest(self, *, since_ms: int) -> List[RawPositionEvent]:
+    def _poll_live_rest(self, *, since_ms: int) -> tuple[List[RawPositionEvent], bool]:
         if not self._config.target_wallet:
             self._logger.warning("ingest_missing_target_wallet")
-            return []
+            return [], False
         now_ms = int(time.time() * 1000)
         return self._fetch_backfill_live(since_ms=since_ms, until_ms=now_ms)
 
@@ -262,7 +277,7 @@ class HyperliquidIngestAdapter:
         events = self._fills_to_events(fills)
         return [event for event in events if (event.timestamp_ms or 0) >= since_ms]
 
-    def _post_json(self, payload: dict) -> List[dict]:
+    def _post_json(self, payload: dict) -> tuple[List[dict], bool]:
         body = json.dumps(payload).encode("utf-8")
         req = url_request.Request(
             self._config.rest_url,
@@ -279,16 +294,16 @@ class HyperliquidIngestAdapter:
                     data = resp.read().decode("utf-8")
                 parsed = json.loads(data)
                 if isinstance(parsed, list):
-                    return parsed
+                    return parsed, True
                 self._logger.warning("ingest_unexpected_response", extra={"payload": payload})
-                return []
+                return [], False
             except (url_error.URLError, json.JSONDecodeError) as exc:
                 if attempt >= max(self._config.retry.max_attempts, 1):
                     self._logger.error(
                         "ingest_rest_failed",
                         extra={"error": str(exc), "attempts": attempt},
                     )
-                    return []
+                    return [], False
                 delay_ms = self._config.retry.next_delay_ms(attempt)
                 time.sleep(delay_ms / 1000.0)
 
@@ -427,7 +442,11 @@ class HyperliquidIngestAdapter:
         self._ws_enabled = False
         self._logger.warning(
             "ingest_ws_closed",
-            extra={"status_code": status_code, "message": msg},
+            extra={
+                "status_code": status_code,
+                "close_message": msg,
+                "ws_message": msg,
+            },
         )
         self._schedule_ws_reconnect()
 

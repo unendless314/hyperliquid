@@ -40,6 +40,7 @@ class IngestCoordinator:
     runtime: IngestRuntimeConfig
     logger: Optional[logging.Logger] = None
     audit_recorder: Optional[Callable[[AuditLogEntry], None]] = None
+    last_event_gap_warn_ms: Optional[int] = None
 
     @staticmethod
     def from_settings(
@@ -97,25 +98,45 @@ class IngestCoordinator:
 
     def _run_backfill(self, conn) -> tuple[List[PositionDeltaEvent], bool]:
         last_ts = int(get_system_state(conn, "last_processed_timestamp_ms") or 0)
+        last_success_ms = int(get_system_state(conn, "last_ingest_success_ms") or 0)
         now_ms = int(time.time() * 1000)
+        if last_success_ms == 0 and last_ts > 0:
+            # Legacy DBs before bootstrap seed; preserve upgrade safety semantics.
+            last_success_ms = last_ts
+        if (
+            last_success_ms > 0
+            and self.runtime.backfill_window_ms
+            and now_ms - last_success_ms > self.runtime.backfill_window_ms
+        ):
+            if self.runtime.maintenance_skip_gap:
+                self._apply_maintenance_skip(conn, now_ms=now_ms)
+                return [], True
+            self._halt_for_gap(
+                conn, last_success_ms=last_success_ms, last_event_ts=last_ts, now_ms=now_ms
+            )
+            return [], False
         if (
             last_ts > 0
             and self.runtime.backfill_window_ms
             and now_ms - last_ts > self.runtime.backfill_window_ms
         ):
-            if self.runtime.maintenance_skip_gap:
-                self._apply_maintenance_skip(conn, now_ms=now_ms)
-                return [], True
-            self._halt_for_gap(conn, last_ts=last_ts, now_ms=now_ms)
-            return [], False
+            self._warn_event_gap(last_ts=last_ts, now_ms=now_ms)
+        else:
+            self.last_event_gap_warn_ms = None
         since_ms = max(0, last_ts - self.runtime.cursor_overlap_ms)
-        raw_events = self.adapter.fetch_backfill(since_ms=since_ms, until_ms=now_ms)
+        raw_events, success = self.adapter.fetch_backfill_with_status(
+            since_ms=since_ms, until_ms=now_ms
+        )
+        if success:
+            set_system_state(conn, "last_ingest_success_ms", str(int(time.time() * 1000)))
         replay_events = [self._with_replay_flag(event, 1) for event in raw_events]
         return self.ingest_service.ingest_raw_events(replay_events, conn), True
 
     def _run_live_poll(self, conn) -> List[PositionDeltaEvent]:
         last_ts = int(get_system_state(conn, "last_processed_timestamp_ms") or 0)
-        raw_events = self.adapter.poll_live_events(since_ms=last_ts)
+        raw_events, success = self.adapter.poll_live_events_with_status(since_ms=last_ts)
+        if success:
+            set_system_state(conn, "last_ingest_success_ms", str(int(time.time() * 1000)))
         live_events = [self._with_replay_flag(event, 0) for event in raw_events]
         return self.ingest_service.ingest_raw_events(live_events, conn)
 
@@ -124,14 +145,18 @@ class IngestCoordinator:
             return event
         return replace(event, is_replay=is_replay)
 
-    def _halt_for_gap(self, conn, *, last_ts: int, now_ms: int) -> None:
+    def _halt_for_gap(
+        self, conn, *, last_success_ms: int, last_event_ts: int, now_ms: int
+    ) -> None:
         logger = self.logger or logging.getLogger("hyperliquid")
         logger.error(
             "ingest_gap_exceeded",
             extra={
-                "last_processed_timestamp_ms": last_ts,
+                "last_ingest_success_ms": last_success_ms,
+                "last_processed_timestamp_ms": last_event_ts,
                 "now_ms": now_ms,
                 "backfill_window_ms": self.runtime.backfill_window_ms,
+                "gap_ms": now_ms - last_success_ms,
             },
         )
         set_safety_state(
@@ -140,6 +165,22 @@ class IngestCoordinator:
             reason_code="BACKFILL_WINDOW_EXCEEDED",
             reason_message="Gap exceeds backfill window",
             audit_recorder=self._audit_recorder(conn),
+        )
+
+    def _warn_event_gap(self, *, last_ts: int, now_ms: int) -> None:
+        if self.last_event_gap_warn_ms is not None:
+            if now_ms - self.last_event_gap_warn_ms < 300_000:
+                return
+        self.last_event_gap_warn_ms = now_ms
+        logger = self.logger or logging.getLogger("hyperliquid")
+        logger.warning(
+            "ingest_event_gap_exceeded",
+            extra={
+                "last_processed_timestamp_ms": last_ts,
+                "now_ms": now_ms,
+                "backfill_window_ms": self.runtime.backfill_window_ms,
+                "gap_ms": now_ms - last_ts,
+            },
         )
 
     def _apply_maintenance_skip(self, conn, *, now_ms: int) -> None:
