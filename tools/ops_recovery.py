@@ -65,6 +65,7 @@ def _maintenance_skip(
         commit=False,
     )
     set_system_state(conn, "maintenance_skip_applied_ms", str(now_ms), commit=False)
+    set_system_state(conn, "last_ingest_success_ms", str(now_ms), commit=False)
     conn.commit()
     _record_audit(
         persistence,
