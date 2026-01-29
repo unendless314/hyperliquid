@@ -220,6 +220,9 @@ Use tools/ops_startup_doctor.py to read safety state, identify blockers, and sho
 
 Example:
 - PYTHONPATH=src python3 tools/ops_startup_doctor.py --config config/settings.yaml --schema config/schema.json
+- For detailed reconciliation diagnosis (HALT + RECONCILE_CRITICAL):
+  - PYTHONPATH=src python3 tools/ops_startup_doctor.py --config config/settings.yaml --schema config/schema.json --verbose
+  - Add --no-exchange-fetch if running without network/API access.
 
 ### Baseline Positions
 When exchange has external/manual positions, a baseline snapshot is required to avoid RECONCILE_CRITICAL.
@@ -233,6 +236,28 @@ Flow:
 2) Verify baseline created_at_ms is recent (via ops_startup_doctor).
 3) Proceed with normal reconcile and promotion flow.
 4) If you need to replace the baseline, rerun ops_sync_positions with --replace.
+
+### Manual Position Adjustment (External)
+Use this flow when you manually adjust positions on the exchange and need the system to align safely.
+
+Key rules:
+- Any changes to decision sizing (e.g., decision.sizing.proportional_ratio) require a process restart to take effect.
+- Baseline sync is required after manual position changes to avoid RECONCILE_CRITICAL.
+- HALT is sticky until an explicit unhalt/promote action is recorded.
+
+Recommended flow (process running):
+1) Sync baseline with replace:
+   - PYTHONPATH=src python3 tools/ops_sync_positions.py --config config/settings.yaml --schema config/schema.json --operator "<name>" --reason-message "Manual position adjustment sync" --replace
+2) If safety_mode is HALT, unhalt then promote after verification:
+   - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action unhalt --reason-message "Manual unhalt after baseline sync"
+   - PYTHONPATH=src python3 tools/ops_recovery.py --config config/settings.yaml --schema config/schema.json --action promote --reason-message "Promote after verification" --allow-non-halt
+3) Verify:
+   - sqlite3 <db_path> "select key, value from system_state where key in ('safety_mode','safety_reason_code');"
+
+Alternative (process stopped):
+1) Update config (if needed), then restart the process.
+2) Sync baseline (same as step 1 above).
+3) Unhalt/promote if HALT persists.
 
 ## Long Downtime Recovery (Gap Exceeded)
 Use this flow when the system has been offline long enough to exceed backfill_window_ms.

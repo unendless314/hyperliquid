@@ -7,6 +7,7 @@
 > 📚 **需要完整技術細節？** 請參考英文版 [RUNBOOK.md](RUNBOOK.md)
 > 🔧 **配置檔提醒：** 本文以 `config/settings.prod.yaml` 為例，若使用 `config/settings.yaml` 請替換對應路徑。
 > 🧭 **基準持倉提醒：** 若交易所帳戶已有外部/手動持倉，需先同步 baseline 才能避免 RECONCILE_CRITICAL。
+> 🔁 **重啟提醒：** 任何 `decision.sizing.*` 的變更（例如 proportional_ratio）都需要重啟程式才會生效。
 
 ---
 
@@ -31,6 +32,14 @@ PYTHONPATH=src python3 tools/ops_startup_doctor.py \
   --config config/settings.prod.yaml \
   --schema config/schema.json
 ```
+需要更詳細對帳診斷時（HALT + RECONCILE_CRITICAL）：
+```bash
+PYTHONPATH=src python3 tools/ops_startup_doctor.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --verbose
+```
+若無法連網或沒有 API 權限，可加上 `--no-exchange-fetch`。
 
 #### 1) 確認安全狀態
 ```bash
@@ -120,9 +129,12 @@ sqlite3 data/hyperliquid_prod.db "SELECT value FROM system_state WHERE key='safe
 
 **根據原因處理：**
 - `BACKFILL_WINDOW_EXCEEDED` → 見下方「問題 3」
-- `RECONCILE_CRITICAL` → 嚴重持倉偏差，需人工核對
+- `RECONCILE_CRITICAL` → 嚴重持倉偏差或商品缺失（local/exchange 一方缺 symbol）；需人工核對並同步 baseline
 - `SCHEMA_VERSION_MISMATCH` → 資料庫版本不符，需重建 DB
 - `EXECUTION_RETRY_BUDGET_EXCEEDED` → 訂單重試次數耗盡，檢查交易所連線
+
+**補充：HALT 持久性**
+- 即使對帳正常，HALT 也不會自動解除；需操作員執行 unhalt / promote（詳見 RUNBOOK）。
 
 ---
 

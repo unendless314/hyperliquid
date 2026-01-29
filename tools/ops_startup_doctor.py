@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from hyperliquid.common.settings import load_settings
+from hyperliquid.execution.adapters.binance import BinanceExecutionAdapter, BinanceExecutionConfig
+from hyperliquid.safety.reconcile import compute_drift, find_missing_symbols, normalize_positions
 from hyperliquid.storage.db import DB_SCHEMA_VERSION
 from hyperliquid.storage.baseline import load_active_baseline
 
@@ -82,12 +84,91 @@ def _suggest_for_safe(reason_code: str, *, config_path: Path, schema_path: Path)
     return suggestions
 
 
+def _append_reconcile_diagnosis(
+    lines: list[str],
+    *,
+    settings,
+    baseline,
+    config_path: Path,
+    schema_path: Path,
+    no_exchange_fetch: bool,
+) -> None:
+    lines.append("")
+    lines.append("## Reconciliation Diagnosis (Verbose)")
+    lines.append(
+        "note=requires_network_and_binance_api_permissions use --no-exchange-fetch to skip"
+    )
+    if baseline is None:
+        local_positions = {}
+    else:
+        local_positions = baseline.positions
+
+    execution_config = BinanceExecutionConfig.from_settings(settings.raw)
+    if not execution_config.enabled or execution_config.mode != "live":
+        lines.append("status=skipped reason=execution_adapter_not_enabled")
+        return
+    if no_exchange_fetch:
+        lines.append("status=skipped reason=exchange_fetch_disabled")
+        return
+
+    try:
+        adapter = BinanceExecutionAdapter(execution_config)
+        exchange_positions, _ = adapter.fetch_positions()
+    except Exception as exc:
+        lines.append(f"status=error reason=fetch_positions_failed error={exc}")
+        return
+
+    local_norm = normalize_positions(local_positions)
+    exchange_norm = normalize_positions(exchange_positions)
+    missing_local, missing_exchange = find_missing_symbols(
+        local_symbols=local_norm.keys(),
+        exchange_symbols=exchange_norm.keys(),
+    )
+    drift_report = compute_drift(local_norm, exchange_norm)
+
+    lines.append(f"baseline_positions={local_positions}")
+    lines.append(f"exchange_positions={exchange_positions}")
+    lines.append(f"local_normalized={local_norm}")
+    lines.append(f"exchange_normalized={exchange_norm}")
+    lines.append(f"missing_local={missing_local}")
+    lines.append(f"missing_exchange={missing_exchange}")
+    lines.append(f"max_drift={drift_report.max_drift}")
+    for symbol, drift in sorted(drift_report.drifts.items()):
+        local_qty = local_norm.get(symbol, 0.0)
+        exchange_qty = exchange_norm.get(symbol, 0.0)
+        lines.append(
+            f"drift symbol={symbol} local={local_qty} exchange={exchange_qty} value={drift}"
+        )
+
+    critical_threshold = settings.raw.get("safety", {}).get("critical_threshold", 0.01)
+    warn_threshold = settings.raw.get("safety", {}).get("warn_threshold", 0.001)
+    if missing_local or missing_exchange:
+        conclusion = "RECONCILE_CRITICAL missing_symbol"
+    elif drift_report.max_drift >= critical_threshold:
+        conclusion = "RECONCILE_CRITICAL drift_exceeds_threshold"
+    elif drift_report.max_drift >= warn_threshold:
+        conclusion = "ARMED_SAFE drift_warn_threshold"
+    else:
+        conclusion = "ARMED_LIVE drift_within_thresholds"
+    lines.append(f"conclusion={conclusion}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Startup doctor (diagnose safety blockers).")
     parser.add_argument("--config", required=True, help="Path to settings.yaml")
     parser.add_argument("--schema", required=True, help="Path to schema.json")
     parser.add_argument("--audit-tail", type=int, default=5, help="Tail N audit log entries.")
     parser.add_argument("--output", help="Write report to file (prints to stdout too).")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include detailed reconciliation diagnosis when HALT/RECONCILE_CRITICAL.",
+    )
+    parser.add_argument(
+        "--no-exchange-fetch",
+        action="store_true",
+        help="Skip exchange fetch for verbose reconciliation diagnosis.",
+    )
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -109,6 +190,9 @@ def main() -> int:
     lines.append("")
 
     db_path = Path(settings.db_path)
+    safety_mode = ""
+    reason_code = ""
+    baseline = None
     if not db_path.exists():
         blockers.append("db_missing")
         suggestions.append("DB file missing; run a dry-run start to initialize.")
@@ -199,6 +283,20 @@ def main() -> int:
                 _print_kv(lines, "safety_reason_message", "")
         finally:
             conn.close()
+
+        if (
+            args.verbose
+            and safety_mode == "HALT"
+            and reason_code == "RECONCILE_CRITICAL"
+        ):
+            _append_reconcile_diagnosis(
+                lines,
+                settings=settings,
+                baseline=baseline,
+                config_path=config_path,
+                schema_path=schema_path,
+                no_exchange_fetch=args.no_exchange_fetch,
+            )
 
     if blockers:
         status = "fail"

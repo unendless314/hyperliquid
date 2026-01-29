@@ -63,6 +63,12 @@ Operational requirements:
 - HALT -> ARMED_SAFE is allowed automatically, but only for reduce-only trading and only when recovery conditions are met.
 - ARMED_SAFE -> ARMED_LIVE requires explicit operator action and evidence.
 
+## HALT Persistence
+- If the current safety_mode is HALT, reconciliation does not auto-exit HALT.
+- Recovery requires either:
+  - auto-recovery conditions to be met (see below), or
+  - explicit operator action (ops_recovery.py unhalt/promote).
+
 ## HALT Auto-Recovery to ARMED_SAFE (Reduce-Only)
 Auto-recovery is permitted only when all of the following conditions are satisfied:
 - Reconcile results are non-critical for N consecutive runs (default N=3; configurable via safety.halt_recovery_noncritical_required).
@@ -113,7 +119,7 @@ When auto-recovery triggers:
 ## Reason Codes (MVP)
 - BACKFILL_WINDOW_EXCEEDED: gap larger than backfill_window
 - SNAPSHOT_STALE: snapshot age exceeds snapshot_max_stale_ms
-- RECONCILE_CRITICAL: drift exceeds critical_threshold
+- RECONCILE_CRITICAL: drift exceeds critical_threshold, or missing symbols detected (local vs exchange)
 - POSITION_MODE_INVALID: exchange is not in one-way mode
 - STORAGE_UNAVAILABLE: DB unavailable or corrupted
 - CONFIG_HASH_MISMATCH: config_hash differs from recorded value

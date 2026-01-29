@@ -75,6 +75,13 @@ PYTHONPATH=src python3 tools/ops_startup_doctor.py \
   --config config/settings.prod.yaml \
   --schema config/schema.json
 
+# 0-1. 詳細對帳診斷（僅在 HALT + RECONCILE_CRITICAL）
+PYTHONPATH=src python3 tools/ops_startup_doctor.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --verbose
+若無法連網或沒有 API 權限，可加上 `--no-exchange-fetch`。
+
 # 1. 檢查安全狀態
 sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key IN ('safety_mode','safety_reason_code','safety_reason_message');"
 
