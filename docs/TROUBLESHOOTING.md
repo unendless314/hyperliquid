@@ -114,7 +114,42 @@ sqlite3 data/hyperliquid_prod.db "SELECT value FROM system_state WHERE key='safe
 
 ---
 
-### 問題 2: 系統進入 HALT 狀態（嚴重）
+### 問題 2: 懷疑跟錯 Target Wallet 或長時間沒有成交
+
+**症狀：**
+- 明明有在 Hyperliquid 交易，但系統沒有事件或沒有下單
+- `last_ingest_success_ms` 有更新，但 `last_processed_timestamp_ms` 長期不變
+- 不確定 config 或 env 是否指向正確錢包
+
+**診斷步驟：**
+1) 用完整查核工具（含 DB 對照）：
+```bash
+PYTHONPATH=src python3 tools/ops_check_target_wallet.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --hours 48
+```
+2) 直接查錢包持倉（不依賴 DB）：
+```bash
+python tools/ops_query_wallet_positions.py --wallet <wallet_address>
+```
+3) 確認 env 與 config：
+```bash
+echo "$HYPERLIQUID_TARGET_WALLET"
+```
+
+**期望結果：**
+- 兩個工具顯示的錢包一致，且與預期地址相同
+- 若有成交，ops_check_target_wallet 應該能看到近期事件
+- 若錢包真有持倉，ops_query_wallet_positions 應該回傳非空
+
+**處置建議：**
+- 若地址錯誤：修正 env 或 config 後重啟
+- 若地址正確但無事件：確認是否真的有成交或回補時間範圍不足
+
+---
+
+### 問題 3: 系統進入 HALT 狀態（嚴重）
 
 **症狀：**
 - `safety_mode=HALT`

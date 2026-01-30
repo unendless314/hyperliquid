@@ -1,6 +1,6 @@
 config_version: "0.1"
-environment: "local"
-db_path: "data/hyperliquid_testnet.db"
+environment: "production"
+db_path: "data/hyperliquid_mainnet.db"
 metrics_log_path: "logs/metrics.log"
 app_log_path: "logs/app.log"
 log_level: "INFO"

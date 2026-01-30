@@ -54,6 +54,10 @@ content and will be completed as the system stabilizes.
 ### Archive
 - archive/: Legacy PRD and system design docs
 
+### Ops Tools (Scripts)
+- tools/ops_check_target_wallet.py: Verify target wallet activity vs local DB
+- tools/ops_query_wallet_positions.py: Directly query live wallet positions
+
 ## MVP Readiness
 Minimum viable docs to start coding:
 - ARCHITECTURE.md

@@ -42,6 +42,25 @@ PYTHONPATH=src python3 tools/hash_config.py \
 
 ---
 
+### 步驟 1-1：確認 Target Wallet（首次實盤建議）
+
+```bash
+# 快速查核（不依賴 DB）：查看錢包是否有持倉
+python tools/ops_query_wallet_positions.py --wallet <wallet_address>
+
+# 完整查核（比對 DB + 最近事件）：確認跟單錢包是否正確
+PYTHONPATH=src python3 tools/ops_check_target_wallet.py \
+  --config config/settings.prod.yaml \
+  --schema config/schema.json \
+  --hours 24
+```
+
+**判讀重點：**
+- 若查到持倉/事件與預期不符，先停用交易，回到 `config/settings.prod.yaml` 核對錢包地址。
+- 詳細說明與判讀方式請參考 [RUNBOOK.md](RUNBOOK.md#target-wallet-verification-recommended) 與 [TROUBLESHOOTING.md](TROUBLESHOOTING.md#問題-2-懷疑跟錯-target-wallet-或長時間沒有成交)。
+
+---
+
 ### 步驟 2：啟動持續運行模式
 
 ```bash
@@ -80,8 +99,11 @@ PYTHONPATH=src python3 tools/ops_startup_doctor.py \
   --config config/settings.prod.yaml \
   --schema config/schema.json \
   --verbose
+```
+
 若無法連網或沒有 API 權限，可加上 `--no-exchange-fetch`。
 
+```bash
 # 1. 檢查安全狀態
 sqlite3 data/hyperliquid_prod.db "SELECT key, value FROM system_state WHERE key IN ('safety_mode','safety_reason_code','safety_reason_message');"
 

@@ -74,6 +74,7 @@
 - Do not allow mixed endpoints within one run.
 - API secrets are loaded from environment variables (BINANCE_API_KEY / BINANCE_API_SECRET).
 - Hyperliquid target wallet is loaded from HYPERLIQUID_TARGET_WALLET (required in live mode).
+  - Verify the intended wallet using tools/ops_check_target_wallet.py or tools/ops_query_wallet_positions.py (see RUNBOOK Target Wallet Verification).
 
 ## Symbol Mapping
 - Maintain a deterministic mapping between Hyperliquid symbols and Binance symbols.

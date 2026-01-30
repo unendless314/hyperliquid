@@ -81,6 +81,25 @@ Copy/paste sequence:
 - sqlite3 <db_path> "select count(*) from audit_log;"
 - tail -n 50 <metrics_log_path>
 
+### Target Wallet Verification (Recommended)
+Use these tools when you need to confirm you are tracking the intended Hyperliquid wallet.
+
+1) End-to-end verification (ingest + DB evidence):
+- PYTHONPATH=src python3 tools/ops_check_target_wallet.py --config config/settings.yaml --schema config/schema.json --hours 24
+- Expected:
+  - Target wallet printed matches intended address.
+  - Recent fills/events are present when trades have occurred.
+  - DB counters (processed_txs/order_intents/trade_history) look reasonable.
+
+2) Direct wallet state query (no DB dependency):
+- python tools/ops_query_wallet_positions.py --wallet <wallet_address>
+- Expected:
+  - Positions reflect the current on-chain state for the wallet.
+
+Notes:
+- HYPERLIQUID_TARGET_WALLET is required in live mode and is loaded from the environment.
+- Use ops_check_target_wallet.py for comprehensive verification; use ops_query_wallet_positions.py for a quick spot-check.
+
 ### Ops Validation Bundle (Recommended)
 Single command to collect preflight + post-start evidence:
 - PYTHONPATH=src python3 tools/ops_validate_run.py --config config/settings.yaml --schema config/schema.json --exchange-time --metrics-tail 5 --output docs/ops_validation_run.txt
