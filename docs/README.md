@@ -41,6 +41,7 @@ content and will be completed as the system stabilizes.
 - ADR.md: Architecture decision records
 - OBSERVABILITY.md: Metrics, logging, alerting, SLO/SLA targets
 - CODE_REVIEW.md: Code quality assessment and improvement roadmap (8.5/10)
+- FILL_AGGREGATION_FIX.md: Incident analysis, evidence, and fix plan for Hyperliquid fill aggregation
 
 ### Modules
 - modules/INGEST.md: Ingest/monitoring module spec
@@ -53,6 +54,7 @@ content and will be completed as the system stabilizes.
 
 ### Archive
 - archive/: Legacy PRD and system design docs
+- archive/evidence/: One-off raw captures and verification artifacts
 
 ### Ops Tools (Scripts)
 - tools/ops_check_target_wallet.py: Verify target wallet activity vs local DB

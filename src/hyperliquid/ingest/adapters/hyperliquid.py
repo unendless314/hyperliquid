@@ -308,12 +308,149 @@ class HyperliquidIngestAdapter:
                 time.sleep(delay_ms / 1000.0)
 
     def _fills_to_events(self, fills: Iterable[dict]) -> List[RawPositionEvent]:
-        events: List[RawPositionEvent] = []
+        grouped: dict[tuple[str, str], list[dict]] = {}
+        missing_hash_count = 0
         for fill in fills:
-            event = self._fill_to_raw(fill)
+            coin = str(fill.get("coin", ""))
+            if coin.startswith("@") or coin not in self._config.symbol_map:
+                self._logger.warning(
+                    "ingest_unmapped_symbol",
+                    extra={"coin": coin},
+                )
+                continue
+            hash_value = fill.get("hash")
+            if not hash_value:
+                missing_hash_count += 1
+            tx_hash = str(hash_value or f"tid-{fill.get('tid', '')}")
+            key = (tx_hash, coin)
+            grouped.setdefault(key, []).append(fill)
+
+        if missing_hash_count:
+            self._logger.warning(
+                "ingest_fill_missing_hash",
+                extra={"missing_hash_count": missing_hash_count},
+            )
+
+        events: List[RawPositionEvent] = []
+        for (tx_hash, coin), group in grouped.items():
+            group_sorted = sorted(
+                group,
+                key=lambda item: (
+                    int(item.get("time", 0)),
+                    int(item.get("tid", 0)),
+                ),
+            )
+            event = self._aggregate_fills_to_raw(
+                group_sorted,
+                tx_hash=tx_hash,
+                coin=coin,
+            )
             if event is not None:
                 events.append(event)
         return events
+
+    def _aggregate_fills_to_raw(
+        self, fills: list[dict], *, tx_hash: str, coin: str
+    ) -> Optional[RawPositionEvent]:
+        if not fills:
+            return None
+        symbol = self._config.symbol_map[coin]
+
+        start_pos = 0.0
+        for fill in fills:
+            if fill.get("startPosition") is not None:
+                start_pos = float(fill.get("startPosition", 0.0))
+                break
+
+        total_delta = 0.0
+        sides: set[str] = set()
+        valid_side_count = 0
+        for fill in fills:
+            side = str(fill.get("side", "")).upper()
+            if side not in {"B", "A"}:
+                self._logger.warning(
+                    "ingest_fill_missing_side",
+                    extra={"tx_hash": tx_hash, "coin": coin, "side": side},
+                )
+                continue
+            sides.add(side)
+            try:
+                size = float(fill.get("sz", 0.0))
+            except (TypeError, ValueError):
+                self._logger.warning(
+                    "ingest_fill_invalid_size",
+                    extra={"tx_hash": tx_hash, "coin": coin},
+                )
+                continue
+            delta = size if side == "B" else -size
+            total_delta += delta
+            valid_side_count += 1
+
+        if valid_side_count == 0:
+            self._logger.warning(
+                "ingest_fill_no_valid_sides",
+                extra={"tx_hash": tx_hash, "coin": coin},
+            )
+            return None
+
+        last_start: Optional[float] = None
+        last_delta: Optional[float] = None
+        for fill in reversed(fills):
+            if fill.get("startPosition") is None:
+                continue
+            side = str(fill.get("side", "")).upper()
+            if side not in {"B", "A"}:
+                continue
+            try:
+                size = float(fill.get("sz", 0.0))
+            except (TypeError, ValueError):
+                continue
+            last_start = float(fill.get("startPosition", 0.0))
+            last_delta = size if side == "B" else -size
+            break
+
+        derived_next = start_pos + total_delta
+        if last_start is not None and last_delta is not None:
+            next_pos = last_start + last_delta
+        else:
+            next_pos = derived_next
+
+        if len(sides) > 1:
+            self._logger.warning(
+                "ingest_fill_mixed_side",
+                extra={"tx_hash": tx_hash, "coin": coin, "sides": sorted(sides)},
+            )
+
+        if abs(derived_next - next_pos) > 1e-9:
+            self._logger.warning(
+                "ingest_fill_position_mismatch",
+                extra={
+                    "tx_hash": tx_hash,
+                    "coin": coin,
+                    "start_pos": start_pos,
+                    "derived_next": derived_next,
+                    "next_pos": next_pos,
+                },
+            )
+
+        last = fills[-1]
+        event_index = int(last.get("tid", 0))
+        timestamp_ms = int(last.get("time", 0))
+        open_component = None
+        close_component = None
+        if start_pos > 0 > next_pos or start_pos < 0 < next_pos:
+            close_component = abs(start_pos)
+            open_component = abs(next_pos)
+        return RawPositionEvent(
+            symbol=symbol,
+            tx_hash=tx_hash,
+            event_index=event_index,
+            prev_target_net_position=start_pos,
+            next_target_net_position=next_pos,
+            timestamp_ms=timestamp_ms,
+            open_component=open_component,
+            close_component=close_component,
+        )
 
     def _fill_to_raw(self, fill: dict) -> Optional[RawPositionEvent]:
         try:

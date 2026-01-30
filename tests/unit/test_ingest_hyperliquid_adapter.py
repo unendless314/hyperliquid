@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List
+
+import pytest
 
 from hyperliquid.common.settings import Settings
 from hyperliquid.ingest.adapters.hyperliquid import HyperliquidIngestAdapter, HyperliquidIngestConfig
@@ -41,6 +44,11 @@ def _settings_with_symbol_map(symbol_map: dict[str, str]) -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def _set_hyperliquid_target_wallet_env() -> None:
+    os.environ["HYPERLIQUID_TARGET_WALLET"] = "0xabc"
+
+
 def test_unmapped_and_spot_coins_are_skipped() -> None:
     settings = _settings_with_symbol_map({"BTC": "BTCUSDT"})
     adapter = HyperliquidIngestAdapter(HyperliquidIngestConfig.from_settings(settings.raw))
@@ -71,3 +79,92 @@ def test_live_poll_uses_backfill_method() -> None:
     adapter._poll_live_rest(since_ms=123)
 
     assert called["count"] == 1
+
+
+def test_fills_are_aggregated_by_hash_and_coin() -> None:
+    settings = _settings_with_symbol_map({"BTC": "BTCUSDT", "ETH": "ETHUSDT"})
+    adapter = HyperliquidIngestAdapter(HyperliquidIngestConfig.from_settings(settings.raw))
+
+    fills = [
+        {
+            "coin": "BTC",
+            "hash": "0xabc",
+            "startPosition": 1.0,
+            "sz": 2.0,
+            "side": "B",
+            "time": 20,
+            "tid": 2,
+        },
+        {
+            "coin": "BTC",
+            "hash": "0xabc",
+            "startPosition": 0.0,
+            "sz": 1.0,
+            "side": "B",
+            "time": 10,
+            "tid": 1,
+        },
+        {
+            "coin": "ETH",
+            "hash": "0xabc",
+            "startPosition": 0.0,
+            "sz": 3.0,
+            "side": "B",
+            "time": 15,
+            "tid": 3,
+        },
+    ]
+
+    events = adapter._fills_to_events(fills)
+
+    assert len(events) == 2
+    btc_event = next(event for event in events if event.symbol == "BTCUSDT")
+    eth_event = next(event for event in events if event.symbol == "ETHUSDT")
+
+    assert btc_event.tx_hash == "0xabc"
+    assert btc_event.event_index == 2
+    assert btc_event.timestamp_ms == 20
+    assert btc_event.prev_target_net_position == 0.0
+    assert btc_event.next_target_net_position == 3.0
+
+    assert eth_event.tx_hash == "0xabc"
+    assert eth_event.event_index == 3
+    assert eth_event.prev_target_net_position == 0.0
+    assert eth_event.next_target_net_position == 3.0
+
+
+def test_single_hash_single_symbol_aggregates_into_one_event() -> None:
+    settings = _settings_with_symbol_map({"BTC": "BTCUSDT"})
+    adapter = HyperliquidIngestAdapter(HyperliquidIngestConfig.from_settings(settings.raw))
+
+    fills = [
+        {
+            "coin": "BTC",
+            "hash": "0xdef",
+            "startPosition": 0.0,
+            "sz": 0.5,
+            "side": "B",
+            "time": 100,
+            "tid": 10,
+        },
+        {
+            "coin": "BTC",
+            "hash": "0xdef",
+            "startPosition": 0.5,
+            "sz": 1.5,
+            "side": "B",
+            "time": 200,
+            "tid": 11,
+        },
+    ]
+
+    events = adapter._fills_to_events(fills)
+
+    assert len(events) == 1
+    event = events[0]
+    assert event.symbol == "BTCUSDT"
+    assert event.tx_hash == "0xdef"
+    assert event.event_index == 11
+    assert event.timestamp_ms == 200
+    assert event.prev_target_net_position == 0.0
+    assert event.next_target_net_position == 2.0
